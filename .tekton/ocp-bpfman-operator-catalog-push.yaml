@@ -4,19 +4,20 @@ metadata:
   annotations:
     build.appstudio.openshift.io/repo: https://github.com/openshift/bpfman-operator?rev={{revision}}
     build.appstudio.redhat.com/commit_sha: '{{revision}}'
-    build.appstudio.redhat.com/pull_request_number: '{{pull_request_number}}'
     build.appstudio.redhat.com/target_branch: '{{target_branch}}'
     pipelinesascode.tekton.dev/max-keep-runs: "3"
-    pipelinesascode.tekton.dev/on-cel-expression: event == "pull_request" && target_branch == "main" &&
-      (".tekton/bpfman-operator-catalog-pull-request.yaml".pathChanged() ||
+    pipelinesascode.tekton.dev/on-cel-expression: event == "push" && target_branch == "main" &&
+     ( ".tekton/ocp-bpfman-operator-catalog-pull-request.yaml".pathChanged() || 
+      ".tekton/ocp-bpfman-operator-catalog-push.yaml".pathChanged() || 
       "Containerfile.catalog.openshift-4.17".pathChanged() ||
-      "catalog/***".pathChanged())
+      "catalog/***".pathChanged() ||
+      "hack/update_catalog.sh".pathChanged())
   creationTimestamp: null
   labels:
     appstudio.openshift.io/application: fbc-4-17
-    appstudio.openshift.io/component: bpfman-operator-catalog
+    appstudio.openshift.io/component: ocp-bpfman-operator-catalog
     pipelines.appstudio.openshift.io/type: build
-  name: bpfman-operator-catalog-on-pull-request
+  name: bpfman-operator-catalog-on-push
   namespace: ocp-bpfman-tenant
 spec:
   params:
@@ -29,9 +30,7 @@ spec:
   - name: revision
     value: '{{revision}}'
   - name: output-image
-    value: quay.io/redhat-user-workloads/ocp-bpfman-tenant/fbc-4-17/bpfman-operator-catalog:on-pr-{{revision}}
-  - name: image-expires-after
-    value: 5d
+    value: quay.io/redhat-user-workloads/ocp-bpfman-tenant/fbc-4-17/bpfman-operator-catalog:{{revision}}
   - name: dockerfile
     value: Containerfile.catalog.openshift-4.17
   pipelineSpec:
