@@ -9,8 +9,8 @@ metadata:
     pipelinesascode.tekton.dev/max-keep-runs: "3"
     pipelinesascode.tekton.dev/on-cel-expression: event == "pull_request" && target_branch == "main" &&
       (".tekton/multi-arch-build-pipeline.yaml".pathChanged() ||
-      ".tekton/bpfman-agent-pull-request.yaml".pathChanged() ||
-      ".tekton/bpfman-agent-push.yaml".pathChanged() ||
+      ".tekton/ocp-bpfman-agent-pull-request.yaml".pathChanged() ||
+      ".tekton/ocp-bpfman-agent-push.yaml".pathChanged() ||
       "apis/***".pathChanged() ||
       "controllers/***".pathChanged() ||
       "cmd/***".pathChanged() ||
@@ -25,7 +25,7 @@ metadata:
   creationTimestamp: null
   labels:
     appstudio.openshift.io/application: bpfman-operator
-    appstudio.openshift.io/component: bpfman-agent
+    appstudio.openshift.io/component: ocp-bpfman-agent
     pipelines.appstudio.openshift.io/type: build
   name: bpfman-agent-on-pull-request
   namespace: ocp-bpfman-tenant
