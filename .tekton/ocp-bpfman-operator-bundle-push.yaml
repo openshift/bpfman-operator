@@ -9,8 +9,8 @@ metadata:
     pipelinesascode.tekton.dev/max-keep-runs: "3"
     pipelinesascode.tekton.dev/on-cel-expression: event == "push" && target_branch == "main"  &&
       (".tekton/single-arch-build-pipeline.yaml".pathChanged() || 
-      ".tekton/bpfman-operator-bundle-pull-request.yaml".pathChanged() || 
-      ".tekton/bpfman-operator-bundle-push.yaml".pathChanged() || 
+      ".tekton/ocp-bpfman-operator-bundle-pull-request.yaml".pathChanged() || 
+      ".tekton/ocp-bpfman-operator-bundle-push.yaml".pathChanged() || 
       "Containerfile.bundle.openshift".pathChanged() ||
       "bundle/***".pathChanged() ||
       "hack/update_bundle.sh".pathChanged() ||
@@ -18,7 +18,7 @@ metadata:
   creationTimestamp: null
   labels:
     appstudio.openshift.io/application: bpfman-operator
-    appstudio.openshift.io/component: bpfman-operator-bundle
+    appstudio.openshift.io/component: ocp-bpfman-operator-bundle
     pipelines.appstudio.openshift.io/type: build
   name: bpfman-operator-bundle-on-push
   namespace: ocp-bpfman-tenant
