@@ -22,7 +22,7 @@ spec:
   - name: revision
     value: '{{revision}}'
   - name: output-image
-    value: quay.io/redhat-user-workloads/ocp-bpfman-tenant/bpfman-operator/bpfman-operator:{{revision}}
+    value: quay.io/redhat-user-workloads/ocp-bpfman-tenant/ocp-bpfman-operator:{{revision}}
   - name: dockerfile
     value: Containerfile.bpfman-operator.openshift
   pipelineSpec:
