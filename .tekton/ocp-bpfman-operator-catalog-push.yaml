@@ -30,7 +30,7 @@ spec:
   - name: revision
     value: '{{revision}}'
   - name: output-image
-    value: quay.io/redhat-user-workloads/ocp-bpfman-tenant/fbc-4-17/bpfman-operator-catalog:{{revision}}
+    value: quay.io/redhat-user-workloads/ocp-bpfman-tenant/ocp-bpfman-operator-catalog:{{revision}}
   - name: dockerfile
     value: Containerfile.catalog.openshift-4.17
   pipelineSpec:
