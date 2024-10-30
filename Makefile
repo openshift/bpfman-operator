@@ -383,6 +383,9 @@ ifneq ($(origin CATALOG_BASE_IMG), undefined)
 FROM_INDEX_OPT := --from-index $(CATALOG_BASE_IMG)
 endif
 
+.PHONY: catalog-update
+catalog-update: ## Generate catalog yaml file.
+	OPM=$(OPM) BUNDLE_IMAGE=$(BUNDLE_IMG) BUNDLE_TAG="v$(VERSION)" ./hack/update_fbc.sh
 
 # Build a catalog image by adding bundle images to an empty catalog using the operator package manager tool, 'opm'.
 # This recipe invokes 'opm' in 'semver' bundle add mode. For more information on add modes, see:

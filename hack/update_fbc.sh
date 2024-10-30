@@ -1,3 +1,41 @@
+# Helper tool to update the catalog artifacts and bundle artifacts
+# These genereated artifacts are used to build the catalog image
+# Pre-requisites: opm, make
+# Usage: ./hack/update_bundle_catalog.sh
+
+#!/bin/bash
+
+set -euo pipefail
+
+cleanup() {
+  # remove temporary bundle file
+  if [ -n "${TEMP_BUNDLE_FILE}" ]; then
+    rm -f "${TEMP_BUNDLE_FILE}"
+  fi
+
+}
+
+trap cleanup EXIT
+
+: ${OPM:=$(command -v opm)}
+echo "using opm from ${OPM}"
+# check if opm version is v1.39.0 or exit
+if [ -z "${OPM}" ]; then
+  echo "opm is required"
+  exit 1
+fi
+
+: ${YQ:=$(command -v yq)}
+echo "using yq from ${YQ}"
+# check if yq exists
+if [ -z "${YQ}" ]; then
+  echo "yq is required"
+  exit 1
+fi
+
+: "${CATALOG_FILE:=catalog/index.yaml}"
+
+cat <<EOF >"${CATALOG_FILE}"
 ---
 defaultChannel: latest
 icon:
@@ -5,502 +43,33 @@ icon:
   mediatype: image/svg+xml
 name: bpfman-operator
 schema: olm.package
----
-image: quay.io/bpfman/bpfman-operator-bundle:v0.5.4
-name: bpfman-operator.v0.5.4
-package: bpfman-operator
-properties:
-- type: olm.gvk
-  value:
-    group: bpfman.io
-    kind: BpfApplication
-    version: v1alpha1
-- type: olm.gvk
-  value:
-    group: bpfman.io
-    kind: BpfProgram
-    version: v1alpha1
-- type: olm.gvk
-  value:
-    group: bpfman.io
-    kind: FentryProgram
-    version: v1alpha1
-- type: olm.gvk
-  value:
-    group: bpfman.io
-    kind: FexitProgram
-    version: v1alpha1
-- type: olm.gvk
-  value:
-    group: bpfman.io
-    kind: KprobeProgram
-    version: v1alpha1
-- type: olm.gvk
-  value:
-    group: bpfman.io
-    kind: TcProgram
-    version: v1alpha1
-- type: olm.gvk
-  value:
-    group: bpfman.io
-    kind: TracepointProgram
-    version: v1alpha1
-- type: olm.gvk
-  value:
-    group: bpfman.io
-    kind: UprobeProgram
-    version: v1alpha1
-- type: olm.gvk
-  value:
-    group: bpfman.io
-    kind: XdpProgram
-    version: v1alpha1
-- type: olm.gvk.required
-  value:
-    group: security-profiles-operator.x-k8s.io
-    kind: SelinuxProfile
-    version: v1alpha2
-- type: olm.package
-  value:
-    packageName: bpfman-operator
-    version: 0.5.4
-- type: olm.csv.metadata
-  value:
-    annotations:
-      alm-examples: |-
-        [
-          {
-            "apiVersion": "bpfman.io/v1alpha1",
-            "kind": "BpfApplication",
-            "metadata": {
-              "labels": {
-                "app.kubernetes.io/name": "bpfapplication"
-              },
-              "name": "bpfapplication-sample"
-            },
-            "spec": {
-              "bytecode": {
-                "image": {
-                  "url": "quay.io/bpfman-bytecode/go-app-counter:latest"
-                }
-              },
-              "nodeselector": {},
-              "programs": [
-                {
-                  "kprobe": {
-                    "bpffunctionname": "kprobe_counter",
-                    "func_name": "try_to_wake_up",
-                    "offset": 0,
-                    "retprobe": false
-                  },
-                  "type": "Kprobe"
-                },
-                {
-                  "tracepoint": {
-                    "bpffunctionname": "tracepoint_kill_recorder",
-                    "names": [
-                      "syscalls/sys_enter_kill"
-                    ]
-                  },
-                  "type": "Tracepoint"
-                },
-                {
-                  "tc": {
-                    "bpffunctionname": "stats",
-                    "direction": "ingress",
-                    "interfaceselector": {
-                      "primarynodeinterface": true
-                    },
-                    "priority": 55
-                  },
-                  "type": "TC"
-                },
-                {
-                  "type": "Uprobe",
-                  "uprobe": {
-                    "bpffunctionname": "uprobe_counter",
-                    "containers": {
-                      "containernames": [
-                        "bpfman",
-                        "bpfman-agent"
-                      ],
-                      "namespace": "bpfman",
-                      "pods": {
-                        "matchLabels": {
-                          "name": "bpfman-daemon"
-                        }
-                      }
-                    },
-                    "func_name": "malloc",
-                    "retprobe": false,
-                    "target": "libc"
-                  }
-                },
-                {
-                  "type": "XDP",
-                  "xdp": {
-                    "bpffunctionname": "xdp_stats",
-                    "interfaceselector": {
-                      "primarynodeinterface": true
-                    },
-                    "priority": 55
-                  }
-                }
-              ]
-            }
-          },
-          {
-            "apiVersion": "bpfman.io/v1alpha1",
-            "kind": "FentryProgram",
-            "metadata": {
-              "labels": {
-                "app.kubernetes.io/name": "fentryprogram"
-              },
-              "name": "fentry-example"
-            },
-            "spec": {
-              "bpffunctionname": "test_fentry",
-              "bytecode": {
-                "image": {
-                  "url": "quay.io/bpfman-bytecode/fentry:latest"
-                }
-              },
-              "func_name": "do_unlinkat",
-              "nodeselector": {}
-            }
-          },
-          {
-            "apiVersion": "bpfman.io/v1alpha1",
-            "kind": "FexitProgram",
-            "metadata": {
-              "labels": {
-                "app.kubernetes.io/name": "fexitprogram"
-              },
-              "name": "fexit-example"
-            },
-            "spec": {
-              "bpffunctionname": "test_fexit",
-              "bytecode": {
-                "image": {
-                  "url": "quay.io/bpfman-bytecode/fexit:latest"
-                }
-              },
-              "func_name": "do_unlinkat",
-              "nodeselector": {}
-            }
-          },
-          {
-            "apiVersion": "bpfman.io/v1alpha1",
-            "kind": "KprobeProgram",
-            "metadata": {
-              "labels": {
-                "app.kubernetes.io/name": "kprobeprogram"
-              },
-              "name": "kprobe-example"
-            },
-            "spec": {
-              "bpffunctionname": "my_kprobe",
-              "bytecode": {
-                "image": {
-                  "url": "quay.io/bpfman-bytecode/kprobe:latest"
-                }
-              },
-              "func_name": "try_to_wake_up",
-              "globaldata": {
-                "GLOBAL_u32": [
-                  13,
-                  12,
-                  11,
-                  10
-                ],
-                "GLOBAL_u8": [
-                  1
-                ]
-              },
-              "nodeselector": {},
-              "offset": 0,
-              "retprobe": false
-            }
-          },
-          {
-            "apiVersion": "bpfman.io/v1alpha1",
-            "kind": "TcProgram",
-            "metadata": {
-              "labels": {
-                "app.kubernetes.io/name": "tcprogram"
-              },
-              "name": "tc-pass-all-nodes"
-            },
-            "spec": {
-              "bpffunctionname": "pass",
-              "bytecode": {
-                "image": {
-                  "url": "quay.io/bpfman-bytecode/tc_pass:latest"
-                }
-              },
-              "direction": "ingress",
-              "globaldata": {
-                "GLOBAL_u32": [
-                  13,
-                  12,
-                  11,
-                  10
-                ],
-                "GLOBAL_u8": [
-                  1
-                ]
-              },
-              "interfaceselector": {
-                "primarynodeinterface": true
-              },
-              "nodeselector": {},
-              "priority": 0
-            }
-          },
-          {
-            "apiVersion": "bpfman.io/v1alpha1",
-            "kind": "TracepointProgram",
-            "metadata": {
-              "labels": {
-                "app.kubernetes.io/name": "tracepointprogram"
-              },
-              "name": "tracepoint-example"
-            },
-            "spec": {
-              "bpffunctionname": "enter_openat",
-              "bytecode": {
-                "image": {
-                  "url": "quay.io/bpfman-bytecode/tracepoint:latest"
-                }
-              },
-              "globaldata": {
-                "GLOBAL_u32": [
-                  13,
-                  12,
-                  11,
-                  10
-                ],
-                "GLOBAL_u8": [
-                  1
-                ]
-              },
-              "names": [
-                "syscalls/sys_enter_openat"
-              ],
-              "nodeselector": {}
-            }
-          },
-          {
-            "apiVersion": "bpfman.io/v1alpha1",
-            "kind": "UprobeProgram",
-            "metadata": {
-              "labels": {
-                "app.kubernetes.io/name": "uprobeprogram"
-              },
-              "name": "uprobe-example"
-            },
-            "spec": {
-              "bpffunctionname": "my_uprobe",
-              "bytecode": {
-                "image": {
-                  "url": "quay.io/bpfman-bytecode/uprobe:latest"
-                }
-              },
-              "func_name": "syscall",
-              "globaldata": {
-                "GLOBAL_u32": [
-                  13,
-                  12,
-                  11,
-                  10
-                ],
-                "GLOBAL_u8": [
-                  1
-                ]
-              },
-              "nodeselector": {},
-              "retprobe": false,
-              "target": "libc"
-            }
-          },
-          {
-            "apiVersion": "bpfman.io/v1alpha1",
-            "kind": "XdpProgram",
-            "metadata": {
-              "labels": {
-                "app.kubernetes.io/name": "xdpprogram"
-              },
-              "name": "xdp-pass-all-nodes"
-            },
-            "spec": {
-              "bpffunctionname": "pass",
-              "bytecode": {
-                "image": {
-                  "url": "quay.io/bpfman-bytecode/xdp_pass:latest"
-                }
-              },
-              "globaldata": {
-                "GLOBAL_u32": [
-                  13,
-                  12,
-                  11,
-                  10
-                ],
-                "GLOBAL_u8": [
-                  1
-                ]
-              },
-              "interfaceselector": {
-                "primarynodeinterface": true
-              },
-              "nodeselector": {},
-              "priority": 0
-            }
-          }
-        ]
-      capabilities: Basic Install
-      categories: OpenShift Optional
-      containerImage: quay.io/bpfman/bpfman-operator:v0.0.0
-      createdAt: "2024-08-20T11:07:37Z"
-      features.operators.openshift.io/cnf: "false"
-      features.operators.openshift.io/cni: "false"
-      features.operators.openshift.io/csi: "true"
-      features.operators.openshift.io/disconnected: "true"
-      features.operators.openshift.io/fips-compliant: "true"
-      features.operators.openshift.io/proxy-aware: "false"
-      features.operators.openshift.io/tls-profiles: "false"
-      features.operators.openshift.io/token-auth-aws: "false"
-      features.operators.openshift.io/token-auth-azure: "false"
-      features.operators.openshift.io/token-auth-gcp: "false"
-      operatorframework.io/suggested-namespace: bpfman
-      operatorframework.io/suggested-namespace-template: |-
-        {
-          "apiVersion": "v1",
-          "kind": "Namespace",
-          "metadata": {
-            "name": "bpfman",
-            "labels": {
-              "pod-security.kubernetes.io/enforce": "privileged",
-              "pod-security.kubernetes.io/audit": "privileged",
-              "pod-security.kubernetes.io/warn": "privileged",
-            },
-            "annotations": {
-              "openshift.io/node-selector": ""
-            },
-          }
-        }
-      operators.openshift.io/infrastructure-features: '["csi", "disconnected"]'
-      operators.openshift.io/valid-subscription: '["OpenShift Kubernetes Engine",
-        "OpenShift Container Platform", "OpenShift Platform Plus"]'
-      operators.operatorframework.io/builder: operator-sdk-v1.27.0
-      operators.operatorframework.io/project_layout: go.kubebuilder.io/v3
-      repository: https://github.com/bpfman/bpfman
-    apiServiceDefinitions: {}
-    crdDescriptions:
-      owned:
-      - description: BpfApplication is the Schema for the bpfapplications API
-        displayName: Bpf Application
-        kind: BpfApplication
-        name: bpfapplications.bpfman.io
-        version: v1alpha1
-      - description: BpfProgram is the Schema for the BpfProgram API
-        displayName: Bpf Program
-        kind: BpfProgram
-        name: bpfprograms.bpfman.io
-        version: v1alpha1
-      - description: FentryProgram is the Schema for the Fentryprograms API
-        displayName: Fentry Program
-        kind: FentryProgram
-        name: fentryprograms.bpfman.io
-        version: v1alpha1
-      - description: FexitProgram is the Schema for the Fexitprograms API
-        displayName: Fexit Program
-        kind: FexitProgram
-        name: fexitprograms.bpfman.io
-        version: v1alpha1
-      - description: KprobeProgram is the Schema for the Kprobeprograms API
-        displayName: Kprobe Program
-        kind: KprobeProgram
-        name: kprobeprograms.bpfman.io
-        version: v1alpha1
-      - description: TcProgram is the Schema for the Tcprograms API
-        displayName: Tc Program
-        kind: TcProgram
-        name: tcprograms.bpfman.io
-        version: v1alpha1
-      - description: TracepointProgram is the Schema for the Tracepointprograms API
-        displayName: Tracepoint Program
-        kind: TracepointProgram
-        name: tracepointprograms.bpfman.io
-        version: v1alpha1
-      - description: UprobeProgram is the Schema for the Uprobeprograms API
-        displayName: Uprobe Program
-        kind: UprobeProgram
-        name: uprobeprograms.bpfman.io
-        version: v1alpha1
-      - description: XdpProgram is the Schema for the Xdpprograms API
-        displayName: Xdp Program
-        kind: XdpProgram
-        name: xdpprograms.bpfman.io
-        version: v1alpha1
-    description: "The eBPF manager Operator is a Kubernetes Operator for deploying [bpfman](https://bpfman.netlify.app/),
-      a system daemon\nfor managing eBPF programs. It deploys bpfman itself along
-      with CRDs to make deploying\neBPF programs in Kubernetes much easier.\n\n##
-      Quick Start\n\nTo get bpfman up and running quickly simply click 'install' to
-      deploy the bpfman-operator in the bpfman namespace via operator-hub.\n## Configuration\n\nThe
-      `bpfman-config` configmap is automatically created in the `bpfman` namespace
-      and used to configure the bpfman deployment.\n\nTo edit the config simply run\n\n```bash\nkubectl
-      edit cm bpfman-config\n```\n\nThe following fields are adjustable\n\n- `bpfman.agent.image`:
-      The image used for the bpfman-agent`\n-
-      `bpfman.image`: The image used for bpfman`\n-
-      `bpfman.log.level`: the log level for bpfman, currently supports `debug`, `info`,
-      `warn`, `error`, and `fatal`, defaults to `info`\n- `bpfman.agent.log.level`:
-      the log level for the bpfman-agent currently supports `info`, `debug`, and `trace`
-      \n\nThe bpfman operator deploys eBPF programs via CRDs. The following CRDs are
-      currently available, \n\n- XdpProgram\n- TcProgram\n- TracepointProgram\n- KprobeProgram\n-
-      UprobeProgram\n- FentryProgram\n- FexitProgram\n\n## More information\n\nPlease
-      checkout the [bpfman community website](https://bpfman.io/) for more information."
-    displayName: eBPF Manager Operator
-    installModes:
-    - supported: false
-      type: OwnNamespace
-    - supported: false
-      type: SingleNamespace
-    - supported: false
-      type: MultiNamespace
-    - supported: true
-      type: AllNamespaces
-    keywords:
-    - ebpf
-    - kubernetes
-    labels:
-      operatorframework.io/arch.amd64: supported
-      operatorframework.io/arch.arm64: supported
-      operatorframework.io/arch.ppc64le: supported
-      operatorframework.io/arch.s390x: supported
-    links:
-    - name: bpfman website
-      url: https://bpfman.io/
-    maintainers:
-    - email: astoycos@redhat.com
-      name: Andrew Stoycos
-    - email: afredette@redhat.com
-      name: Andre Fredette
-    maturity: alpha
-    provider:
-      name: Red Hat
-      url: https://www.redhat.com
-relatedImages:
-- image: gcr.io/kubebuilder/kube-rbac-proxy:v0.13.0
-  name: ""
-- image: quay.io/bpfman/bpfman-operator-bundle:v0.5.4
-  name: ""
-- image: quay.io/bpfman/bpfman-operator:v0.5.4
-  name: ""
-schema: olm.bundle
+EOF
+
+
+echo "Adding bundle image to FBC using image ${BUNDLE_IMAGE}"
+
+# # create a temporary file for the bundle part of the catalog
+TEMP_BUNDLE_FILE=$(mktemp)
+
+${OPM} render "${BUNDLE_IMAGE}" --output=yaml >"${TEMP_BUNDLE_FILE}"
+
+cat ${TEMP_BUNDLE_FILE} >>${CATALOG_FILE}
+
+cat <<EOF >>"${CATALOG_FILE}"
 ---
 schema: olm.channel
 package: bpfman-operator
 name: latest
 entries:
-  - name: bpfman-operator.v0.5.4
+  - name: bpfman-operator.${BUNDLE_TAG}
+EOF
+
+${OPM} validate $(dirname "${CATALOG_FILE}")
+if [ $? -ne 0 ]; then
+  echo "Validation failed for ${CATALOG_FILE}"
+  exit 1
+else
+  echo "Validation passed for ${CATALOG_FILE}"
+fi
+
+echo "Finished running $(basename "$0")"
