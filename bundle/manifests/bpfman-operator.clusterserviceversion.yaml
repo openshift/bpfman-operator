@@ -51,6 +51,17 @@ metadata:
                 "type": "TC"
               },
               {
+                "tcx": {
+                  "bpffunctionname": "tcx_stats",
+                  "direction": "ingress",
+                  "interfaceselector": {
+                    "primarynodeinterface": true
+                  },
+                  "priority": 500
+                },
+                "type": "TCX"
+              },
+              {
                 "type": "Uprobe",
                 "uprobe": {
                   "bpffunctionname": "uprobe_counter",
@@ -295,8 +306,8 @@ metadata:
       ]
     capabilities: Basic Install
     categories: OpenShift Optional
-    containerImage: quay.io/bpfman/bpfman-operator:v0.0.0
-    createdAt: "2024-10-10T19:42:33Z"
+    containerImage: quay.io/bpfman/bpfman-operator:latest
+    createdAt: "2024-10-21T11:51:40Z"
     features.operators.openshift.io/cnf: "false"
     features.operators.openshift.io/cni: "false"
     features.operators.openshift.io/csi: "true"
@@ -335,7 +346,7 @@ metadata:
     operatorframework.io/arch.arm64: supported
     operatorframework.io/arch.ppc64le: supported
     operatorframework.io/arch.s390x: supported
-  name: bpfman-operator.v0.5.2
+  name: bpfman-operator.v0.5.4
   namespace: placeholder
 spec:
   apiservicedefinitions: {}
@@ -371,6 +382,9 @@ spec:
       kind: TcProgram
       name: tcprograms.bpfman.io
       version: v1alpha1
+    - kind: TcxProgram
+      name: tcxprograms.bpfman.io
+      version: v1alpha1
     - description: TracepointProgram is the Schema for the Tracepointprograms API
       displayName: Tracepoint Program
       kind: TracepointProgram
@@ -399,8 +413,8 @@ spec:
     `warn`, `error`, and `fatal`, defaults to `info`\n- `bpfman.agent.log.level`:
     the log level for the bpfman-agent currently supports `info`, `debug`, and `trace`
     \n\nThe bpfman operator deploys eBPF programs via CRDs. The following CRDs are
-    currently available, \n\n- XdpProgram\n- TcProgram\n- TracepointProgram\n- KprobeProgram\n-
-    UprobeProgram\n- FentryProgram\n- FexitProgram\n\n## More information\n\nPlease
+    currently available, \n\n- BpfApplication\n- XdpProgram\n- TcProgram\n - TracepointProgram\n-
+    KprobeProgram\n- UprobeProgram\n- FentryProgram\n- FexitProgram\n\n ## More information\n\nPlease
     checkout the [bpfman community website](https://bpfman.io/) for more information."
   displayName: Bpfman Operator
   icon:
@@ -866,6 +880,32 @@ spec:
         - apiGroups:
           - bpfman.io
           resources:
+          - tcxprograms
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - bpfman.io
+          resources:
+          - tcxprograms/finalizers
+          verbs:
+          - update
+        - apiGroups:
+          - bpfman.io
+          resources:
+          - tcxprograms/status
+          verbs:
+          - get
+          - patch
+          - update
+        - apiGroups:
+          - bpfman.io
+          resources:
           - tracepointprograms
           verbs:
           - create
@@ -1153,4 +1193,4 @@ spec:
   provider:
     name: The bpfman Community
     url: https://bpfman.io/
-  version: 0.5.2
+  version: 0.5.4
