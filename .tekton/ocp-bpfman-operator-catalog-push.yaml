@@ -11,6 +11,7 @@ metadata:
       ".tekton/ocp-bpfman-operator-catalog-push.yaml".pathChanged() || 
       "Containerfile.catalog.openshift-4.17".pathChanged() ||
       "catalog/***".pathChanged() ||
+      "rpms.in.yaml".pathChanged() ||
       "hack/update_catalog.sh".pathChanged())
   creationTimestamp: null
   labels:
