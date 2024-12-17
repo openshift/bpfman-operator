@@ -247,28 +247,27 @@ spec:
         value: "$(tasks.build-container.results.IMAGE_DIGEST)"
       - name: image-url
         value: "$(tasks.build-container.results.IMAGE_URL)"
-    - name: sbom-json-check
-      taskRef:
-        resolver: bundles
-        params:
-        - name: name
-          value: sbom-json-check
-        - name: bundle
-          value: quay.io/konflux-ci/tekton-catalog/task-sbom-json-check:0.2@sha256:13c4ca605097ab8390b39d4ddf854ec6574bb7bc55b6b237aab9490c6542104a
-        - name: kind
-          value: task
+    - name: rpms-signature-scan
       when:
-      - input: "$(params.skip-checks)"
-        operator: in
-        values:
-        - 'false'
+        - input: $(params.skip-checks)
+          operator: in
+          values: ["false"]
       runAfter:
-      - build-container
+        - build-container
+      taskRef:
+        params:
+          - name: name
+            value: rpms-signature-scan
+          - name: bundle
+            value: quay.io/konflux-ci/tekton-catalog/task-rpms-signature-scan:0.2@sha256:ec536e55a039052823ba74e07db3175554fb046649671d1fefd776ca064d00ac
+          - name: kind
+            value: task
+        resolver: bundles
       params:
-      - name: IMAGE_URL
-        value: "$(tasks.build-container.results.IMAGE_URL)"
-      - name: IMAGE_DIGEST
-        value: "$(tasks.build-container.results.IMAGE_DIGEST)"
+        - name: image-url
+          value: $(tasks.build-container.results.IMAGE_URL)
+        - name: image-digest
+          value: $(tasks.build-container.results.IMAGE_DIGEST)
     params:
     - name: git-url
       type: string
