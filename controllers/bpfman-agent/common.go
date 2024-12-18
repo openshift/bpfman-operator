@@ -51,6 +51,7 @@ import (
 //+kubebuilder:rbac:groups=bpfman.io,resources=bpfprograms/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=bpfman.io,resources=bpfprograms/finalizers,verbs=update
 //+kubebuilder:rbac:groups=bpfman.io,resources=tcprograms/finalizers,verbs=update
+//+kubebuilder:rbac:groups=bpfman.io,resources=tcxprograms/finalizers,verbs=update
 //+kubebuilder:rbac:groups=bpfman.io,resources=xdpprograms/finalizers,verbs=update
 //+kubebuilder:rbac:groups=bpfman.io,resources=tracepointprograms/finalizers,verbs=update
 //+kubebuilder:rbac:groups=bpfman.io,resources=kprobeprograms/finalizers,verbs=update
@@ -216,7 +217,7 @@ func (r *ReconcilerCommon) reconcileBpfProgram(ctx context.Context,
 		id, err := bpfmanagentinternal.GetID(bpfProgram)
 		if err != nil {
 			r.Logger.Error(err, "Failed to get bpf program ID")
-			return bpfmaniov1alpha1.BpfProgCondNotLoaded, nil
+			return bpfmaniov1alpha1.BpfProgCondNotLoaded, err
 		}
 		switch shouldBeLoaded {
 		case true:
@@ -231,7 +232,7 @@ func (r *ReconcilerCommon) reconcileBpfProgram(ctx context.Context,
 				r.Logger.V(1).Info("bpf program is in wrong state, unloading and reloading", "reason", reasons, "bpfProgram Name", bpfProgram.Name, "bpf program ID", id)
 				if err := bpfmanagentinternal.UnloadBpfmanProgram(ctx, r.BpfmanClient, *id); err != nil {
 					r.Logger.Error(err, "Failed to unload BPF Program")
-					return bpfmaniov1alpha1.BpfProgCondNotUnloaded, nil
+					return bpfmaniov1alpha1.BpfProgCondNotUnloaded, err
 				}
 
 				r.Logger.Info("Calling bpfman to load bpf program on Node", "bpfProgram Name", bpfProgram.Name)
@@ -250,7 +251,7 @@ func (r *ReconcilerCommon) reconcileBpfProgram(ctx context.Context,
 			r.Logger.Info("Calling bpfman to unload program on node", "bpfProgram Name", bpfProgram.Name, "Program ID", id)
 			if err := bpfmanagentinternal.UnloadBpfmanProgram(ctx, r.BpfmanClient, *id); err != nil {
 				r.Logger.Error(err, "Failed to unload Program")
-				return bpfmaniov1alpha1.BpfProgCondNotUnloaded, nil
+				return bpfmaniov1alpha1.BpfProgCondNotUnloaded, err
 			}
 		}
 	case false:
@@ -266,7 +267,7 @@ func (r *ReconcilerCommon) reconcileBpfProgram(ctx context.Context,
 			r.progId, err = bpfmanagentinternal.LoadBpfmanProgram(ctx, r.BpfmanClient, loadRequest)
 			if err != nil {
 				r.Logger.Error(err, "Failed to load Program")
-				return bpfmaniov1alpha1.BpfProgCondNotLoaded, nil
+				return bpfmaniov1alpha1.BpfProgCondNotLoaded, err
 			}
 		case false:
 			// The program isn't loaded and it shouldn't be loaded.
@@ -784,10 +785,10 @@ func (r *ReconcilerCommon) handleProgCreateOrUpdate(
 				}
 			}
 
-			existingId, err := bpfmanagentinternal.GetID(&existingBpfProgram)
-			if err != nil {
-				return internal.Requeue, fmt.Errorf("failed to get kernel id from bpfProgram: %v", err)
-			}
+			// GetID() will fail if ProgramId is not in the annotations, which is expected on a
+			// create. In this case existingId will be nil and DeepEqual() will fail and cause
+			// annotation to be set.
+			existingId, _ := bpfmanagentinternal.GetID(&existingBpfProgram)
 
 			// If bpfProgram Maps OR the program ID annotation isn't up to date just update it and return
 			if !reflect.DeepEqual(existingId, r.progId) {

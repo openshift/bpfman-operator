@@ -24,7 +24,7 @@ COPY . .
 # by leaving it empty we can ensure that the container and binary shipped on it will have the same platform.
 RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -mod vendor -o bpfman-operator ./cmd/bpfman-operator/main.go
 
-FROM --platform=$TARGETPLATFORM registry.access.redhat.com/ubi9/ubi-minimal:9.4-1227.1725849298
+FROM --platform=$TARGETPLATFORM registry.access.redhat.com/ubi9/ubi-minimal:9.5-1733767867
 
 # The following ARGs are set internally by docker or podman on multiarch builds
 ARG TARGETPLATFORM
@@ -42,7 +42,7 @@ LABEL name="bpfman/bpfman-operator" \
       description="The bpfman-operator repository exists to deploy and manage bpfman within a Kubernetes cluster." \
       io.k8s.description="The bpfman-operator repository exists to deploy and manage bpfman within a Kubernetes cluster. ." \
       io.openshift.tags="bpfman-operator" \
-      version="0.5.1" \
+      version="0.5.4" \
       vendor="Red Hat, Inc."
 
 USER 65532:65532

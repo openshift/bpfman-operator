@@ -8,26 +8,18 @@ metadata:
     build.appstudio.redhat.com/target_branch: '{{target_branch}}'
     pipelinesascode.tekton.dev/max-keep-runs: "3"
     pipelinesascode.tekton.dev/on-cel-expression: event == "pull_request" && target_branch == "main" &&
-      (".tekton/multi-arch-build-pipeline.yaml".pathChanged() ||
-      ".tekton/bpfman-agent-pull-request.yaml".pathChanged() ||
-      ".tekton/bpfman-agent-push.yaml".pathChanged() ||
-      "apis/***".pathChanged() ||
-      "controllers/***".pathChanged() ||
-      "cmd/***".pathChanged() ||
-      "Containerfile.bpfman-agent.openshift".pathChanged() ||
-      "go.mod".pathChanged() ||
-      "go.sum".pathChanged() ||
-      "Makefile".pathChanged() ||
-      "pkg/***".pathChanged() ||
-      "internal/***".pathChanged() ||
-      "test/***".pathChanged() ||
-      "vendor/***".pathChanged())
+      (".tekton/single-arch-build-pipeline.yaml".pathChanged() || 
+      ".tekton/ocp-bpfman-operator-bundle-pull-request.yaml".pathChanged() || 
+      ".tekton/ocp-bpfman-operator-bundle-push.yaml".pathChanged() || 
+      "Containerfile.bundle.openshift".pathChanged() ||
+      "bundle/***".pathChanged() ||
+      "hack/***".pathChanged())
   creationTimestamp: null
   labels:
     appstudio.openshift.io/application: bpfman-operator
-    appstudio.openshift.io/component: bpfman-agent
+    appstudio.openshift.io/component: ocp-bpfman-operator-bundle
     pipelines.appstudio.openshift.io/type: build
-  name: bpfman-agent-on-pull-request
+  name: bpfman-operator-bundle-on-pull-request
   namespace: ocp-bpfman-tenant
 spec:
   params:
@@ -40,21 +32,13 @@ spec:
   - name: revision
     value: '{{revision}}'
   - name: output-image
-    value: quay.io/redhat-user-workloads/ocp-bpfman-tenant/bpfman-operator/bpfman-agent:on-pr-{{revision}}
+    value: quay.io/redhat-user-workloads/ocp-bpfman-tenant/ocp-bpfman-operator-bundle:on-pr-{{revision}}
   - name: image-expires-after
     value: 5d
   - name: dockerfile
-    value: Containerfile.bpfman-agent.openshift
-  - name: path-context
-    value: .
-  - name: build-platforms
-    value:
-      - localhost
-      - linux/arm64
-      - linux/ppc64le
-      - linux/s390x
+    value: Containerfile.bundle.openshift
   pipelineRef:
-    name: build-pipeline
+    name: single-arch-build-pipeline
   taskRunTemplate: {}
   workspaces:
   - name: workspace
