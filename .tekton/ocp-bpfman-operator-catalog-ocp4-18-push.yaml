@@ -7,7 +7,13 @@ metadata:
     build.appstudio.redhat.com/target_branch: '{{target_branch}}'
     pipelinesascode.tekton.dev/max-keep-runs: "3"
     pipelinesascode.tekton.dev/on-cel-expression: event == "push" && target_branch
-      == "main"
+      == "main" &&
+      (".tekton/ocp-bpfman-operator-catalog-ocp4-18-pull-request.yaml".pathChanged() ||
+      ".tekton/ocp-bpfman-operator-catalog-ocp4-18-push.yaml".pathChanged() ||
+      "Containerfile.catalog.openshift-4.18".pathChanged() ||
+      "catalog/***".pathChanged() ||
+      "rpms.in.yaml".pathChanged() ||
+      "hack/update_catalog.sh".pathChanged())
   creationTimestamp: null
   labels:
     appstudio.openshift.io/application: fbc-4-18
@@ -17,6 +23,10 @@ metadata:
   namespace: ocp-bpfman-tenant
 spec:
   params:
+  - name: build-source-image
+    value: "true"
+  - name: prefetch-input
+    value: '{"packages": [{"type": "rpm"}]}'
   - name: git-url
     value: '{{source_url}}'
   - name: revision
@@ -77,13 +87,17 @@ spec:
       description: Skip checks against built image
       name: skip-checks
       type: string
-    - default: "true"
+    - default: "false"
       description: Execute the build with network isolation
       name: hermetic
       type: string
     - default: ""
       description: Build dependencies to be prefetched by Cachi2
       name: prefetch-input
+      type: string
+    - default: "true"
+      description: Enable dev-package-managers in prefetch task
+      name: prefetch-dev-package-managers-enabled
       type: string
     - default: ""
       description: Image tag expiration time, time values could be something like
@@ -93,7 +107,7 @@ spec:
       description: Build a source image.
       name: build-source-image
       type: string
-    - default: "true"
+    - default: "false"
       description: Add built image into an OCI image index
       name: build-image-index
       type: string
@@ -181,6 +195,8 @@ spec:
         value: $(params.output-image).prefetch
       - name: ociArtifactExpiresAfter
         value: $(params.image-expires-after)
+      - name: dev-package-managers
+        value: "true"
       runAfter:
       - clone-repository
       taskRef:
