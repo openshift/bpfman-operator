@@ -116,6 +116,17 @@ properties:
                   "type": "TC"
                 },
                 {
+                  "tcx": {
+                    "bpffunctionname": "tcx_stats",
+                    "direction": "ingress",
+                    "interfaceselector": {
+                      "primarynodeinterface": true
+                    },
+                    "priority": 500
+                  },
+                  "type": "TCX"
+                },
+                {
                   "type": "Uprobe",
                   "uprobe": {
                     "bpffunctionname": "uprobe_counter",
@@ -428,6 +439,9 @@ properties:
         kind: TcProgram
         name: tcprograms.bpfman.io
         version: v1alpha1
+      - kind: TcxProgram
+        name: tcxprograms.bpfman.io
+        version: v1alpha1
       - description: TracepointProgram is the Schema for the Tracepointprograms API
         displayName: Tracepoint Program
         kind: TracepointProgram
@@ -457,7 +471,7 @@ properties:
       `warn`, `error`, and `fatal`, defaults to `info`\n- `bpfman.agent.log.level`:
       the log level for the bpfman-agent currently supports `info`, `debug`, and `trace`
       \n\nThe bpfman operator deploys eBPF programs via CRDs. The following CRDs are
-      currently available, \n\n- XdpProgram\n- TcProgram\n- TracepointProgram\n- KprobeProgram\n-
+      currently available, \n\n- XdpProgram\n- TcProgram\n- TcxProgram\n- TracepointProgram\n- KprobeProgram\n-
       UprobeProgram\n- FentryProgram\n- FexitProgram\n\n## More information\n\nPlease
       checkout the [bpfman community website](https://bpfman.io/) for more information."
     displayName: eBPF Manager Operator
