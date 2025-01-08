@@ -11,6 +11,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+//lint:file-ignore U1000 Linter claims functions unused, but are required for generic
+
 package bpfmanoperator
 
 import (
@@ -27,7 +29,6 @@ import (
 	bpfmaniov1alpha1 "github.com/bpfman/bpfman-operator/apis/v1alpha1"
 	"github.com/bpfman/bpfman-operator/internal"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
-	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
 
@@ -36,11 +37,11 @@ import (
 //+kubebuilder:rbac:groups=bpfman.io,resources=uprobeprograms/finalizers,verbs=update
 
 type UprobeProgramReconciler struct {
-	ReconcilerCommon
+	ClusterProgramReconciler
 }
 
-func (r *UprobeProgramReconciler) getRecCommon() *ReconcilerCommon {
-	return &r.ReconcilerCommon
+func (r *UprobeProgramReconciler) getRecCommon() *ReconcilerCommon[bpfmaniov1alpha1.BpfProgram, bpfmaniov1alpha1.BpfProgramList] {
+	return &r.ClusterProgramReconciler.ReconcilerCommon
 }
 
 func (r *UprobeProgramReconciler) getFinalizer() string {
@@ -55,13 +56,14 @@ func (r *UprobeProgramReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Watches(
 			&bpfmaniov1alpha1.BpfProgram{},
 			&handler.EnqueueRequestForObject{},
-			builder.WithPredicates(predicate.And(statusChangedPredicate(), internal.BpfProgramTypePredicate(internal.UprobeString))),
+			builder.WithPredicates(predicate.And(statusChangedPredicateCluster(), internal.BpfProgramTypePredicate(internal.UprobeString))),
 		).
 		Complete(r)
 }
 
 func (r *UprobeProgramReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	r.Logger = log.FromContext(ctx)
+	r.Logger = ctrl.Log.WithName("uprobe")
+	r.Logger.Info("bpfman-operator enter: uprobe", "Name", req.NamespacedName.Name)
 
 	uprobeProgram := &bpfmaniov1alpha1.UprobeProgram{}
 	if err := r.Get(ctx, req.NamespacedName, uprobeProgram); err != nil {
@@ -101,7 +103,7 @@ func (r *UprobeProgramReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	return reconcileBpfProgram(ctx, r, uprobeProgram)
 }
 
-func (r *UprobeProgramReconciler) updateStatus(ctx context.Context, name string, cond bpfmaniov1alpha1.ProgramConditionType, message string) (ctrl.Result, error) {
+func (r *UprobeProgramReconciler) updateStatus(ctx context.Context, _namespace string, name string, cond bpfmaniov1alpha1.ProgramConditionType, message string) (ctrl.Result, error) {
 	// Sometimes we end up with a stale UprobeProgram due to races, do this
 	// get to ensure we're up to date before attempting a status update.
 	prog := &bpfmaniov1alpha1.UprobeProgram{}

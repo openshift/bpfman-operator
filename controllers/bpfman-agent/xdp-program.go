@@ -14,11 +14,14 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+//lint:file-ignore U1000 Linter claims functions unused, but are required for generic
+
 package bpfmanagent
 
 import (
 	"context"
 	"fmt"
+	"strconv"
 
 	bpfmaniov1alpha1 "github.com/bpfman/bpfman-operator/apis/v1alpha1"
 	bpfmanagentinternal "github.com/bpfman/bpfman-operator/controllers/bpfman-agent/internal"
@@ -32,7 +35,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
-	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
 
@@ -40,7 +42,7 @@ import (
 
 // BpfProgramReconciler reconciles a BpfProgram object
 type XdpProgramReconciler struct {
-	ReconcilerCommon
+	ClusterProgramReconciler
 	currentXdpProgram *bpfmaniov1alpha1.XdpProgram
 	interfaces        []string
 	ourNode           *v1.Node
@@ -68,6 +70,14 @@ func (r *XdpProgramReconciler) getProgType() internal.ProgramType {
 
 func (r *XdpProgramReconciler) getName() string {
 	return r.currentXdpProgram.Name
+}
+
+func (r *XdpProgramReconciler) getNamespace() string {
+	return r.currentXdpProgram.Namespace
+}
+
+func (r *XdpProgramReconciler) getNoContAnnotationIndex() string {
+	return internal.XdpNoContainersOnNode
 }
 
 func (r *XdpProgramReconciler) getNode() *v1.Node {
@@ -152,22 +162,91 @@ func (r *XdpProgramReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			&handler.EnqueueRequestForObject{},
 			builder.WithPredicates(predicate.And(predicate.LabelChangedPredicate{}, nodePredicate(r.NodeName))),
 		).
+		// Watch for changes in Pod resources in case we are using a container selector.
+		Watches(
+			&v1.Pod{},
+			&handler.EnqueueRequestForObject{},
+			builder.WithPredicates(podOnNodePredicate(r.NodeName)),
+		).
 		Complete(r)
 }
 
 func (r *XdpProgramReconciler) getExpectedBpfPrograms(ctx context.Context) (*bpfmaniov1alpha1.BpfProgramList, error) {
 	progs := &bpfmaniov1alpha1.BpfProgramList{}
 
-	for _, iface := range r.interfaces {
-		attachPoint := iface
-		annotations := map[string]string{internal.XdpProgramInterface: iface}
+	if r.currentXdpProgram.Spec.Containers != nil {
 
-		prog, err := r.createBpfProgram(attachPoint, r, annotations)
+		// There is a container selector, so see if there are any matching
+		// containers on this node.
+		containerInfo, err := r.Containers.GetContainers(
+			ctx,
+			r.currentXdpProgram.Spec.Containers.Namespace,
+			r.currentXdpProgram.Spec.Containers.Pods,
+			r.currentXdpProgram.Spec.Containers.ContainerNames,
+			r.Logger,
+		)
 		if err != nil {
-			return nil, fmt.Errorf("failed to create BpfProgram %s: %v", attachPoint, err)
+			return nil, fmt.Errorf("failed to get container pids: %v", err)
 		}
 
-		progs.Items = append(progs.Items, *prog)
+		if containerInfo == nil || len(*containerInfo) == 0 {
+			// There were no errors, but the container selector didn't
+			// select any containers on this node.
+			for _, iface := range r.interfaces {
+				attachPoint := fmt.Sprintf("%s-%s",
+					iface,
+					"no-containers-on-node",
+				)
+
+				annotations := map[string]string{
+					internal.XdpProgramInterface:   iface,
+					internal.XdpNoContainersOnNode: "true",
+				}
+
+				prog, err := r.createBpfProgram(attachPoint, r, annotations)
+				if err != nil {
+					return nil, fmt.Errorf("failed to create BpfProgram %s: %v", attachPoint, err)
+				}
+
+				progs.Items = append(progs.Items, *prog)
+			}
+		} else {
+			// Containers were found, so create bpfPrograms.
+			for i := range *containerInfo {
+				container := (*containerInfo)[i]
+				for _, iface := range r.interfaces {
+					attachPoint := fmt.Sprintf("%s-%s-%s",
+						iface,
+						container.podName,
+						container.containerName,
+					)
+
+					annotations := map[string]string{
+						internal.XdpProgramInterface: iface,
+						internal.XdpContainerPid:     strconv.FormatInt(container.pid, 10),
+					}
+
+					prog, err := r.createBpfProgram(attachPoint, r, annotations)
+					if err != nil {
+						return nil, fmt.Errorf("failed to create BpfProgram %s: %v", attachPoint, err)
+					}
+
+					progs.Items = append(progs.Items, *prog)
+				}
+			}
+		}
+	} else {
+		for _, iface := range r.interfaces {
+			attachPoint := iface
+			annotations := map[string]string{internal.XdpProgramInterface: iface}
+
+			prog, err := r.createBpfProgram(attachPoint, r, annotations)
+			if err != nil {
+				return nil, fmt.Errorf("failed to create BpfProgram %s: %v", attachPoint, err)
+			}
+
+			progs.Items = append(progs.Items, *prog)
+		}
 	}
 
 	return progs, nil
@@ -181,8 +260,7 @@ func (r *XdpProgramReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	r.ourNode = &v1.Node{}
 	r.Logger = ctrl.Log.WithName("xdp")
 
-	ctxLogger := log.FromContext(ctx)
-	ctxLogger.Info("Reconcile XDP: Enter", "ReconcileKey", req)
+	r.Logger.Info("bpfman-agent enter: xdp", "Name", req.Name)
 
 	// Lookup K8s node object for this bpfman-agent This should always succeed
 	if err := r.Get(ctx, types.NamespacedName{Namespace: v1.NamespaceAll, Name: r.NodeName}, r.ourNode); err != nil {
@@ -220,17 +298,25 @@ func (r *XdpProgramReconciler) getLoadRequest(bpfProgram *bpfmaniov1alpha1.BpfPr
 		return nil, fmt.Errorf("failed to process bytecode selector: %v", err)
 	}
 
+	attachInfo := &gobpfman.XDPAttachInfo{
+		Priority:  r.currentXdpProgram.Spec.Priority,
+		Iface:     bpfProgram.Annotations[internal.XdpProgramInterface],
+		ProceedOn: xdpProceedOnToInt(r.currentXdpProgram.Spec.ProceedOn),
+	}
+
+	containerPidStr, ok := bpfProgram.Annotations[internal.XdpContainerPid]
+	if ok {
+		netns := fmt.Sprintf("/host/proc/%s/ns/net", containerPidStr)
+		attachInfo.Netns = &netns
+	}
+
 	loadRequest := gobpfman.LoadRequest{
 		Bytecode:    bytecode,
 		Name:        r.currentXdpProgram.Spec.BpfFunctionName,
 		ProgramType: uint32(internal.Xdp),
 		Attach: &gobpfman.AttachInfo{
 			Info: &gobpfman.AttachInfo_XdpAttachInfo{
-				XdpAttachInfo: &gobpfman.XDPAttachInfo{
-					Priority:  r.currentXdpProgram.Spec.Priority,
-					Iface:     bpfProgram.Annotations[internal.XdpProgramInterface],
-					ProceedOn: xdpProceedOnToInt(r.currentXdpProgram.Spec.ProceedOn),
-				},
+				XdpAttachInfo: attachInfo,
 			},
 		},
 		Metadata:   map[string]string{internal.UuidMetadataKey: string(bpfProgram.UID), internal.ProgramNameKey: r.getOwner().GetName()},
