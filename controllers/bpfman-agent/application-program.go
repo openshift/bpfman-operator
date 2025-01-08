@@ -1,3 +1,19 @@
+/*
+Copyright 2024.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package bpfmanagent
 
 import (
@@ -15,14 +31,13 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
-	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
 
 //+kubebuilder:rbac:groups=bpfman.io,resources=bpfapplications,verbs=get;list;watch
 
 type BpfApplicationReconciler struct {
-	ReconcilerCommon
+	ClusterProgramReconciler
 	currentApp *bpfmaniov1alpha1.BpfApplication
 	ourNode    *v1.Node
 }
@@ -40,8 +55,7 @@ func (r *BpfApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	r.finalizer = internal.BpfApplicationControllerFinalizer
 	r.recType = internal.ApplicationString
 
-	ctxLogger := log.FromContext(ctx)
-	ctxLogger.Info("Reconcile Application: Enter", "ReconcileKey", req)
+	r.Logger.Info("bpfman-agent enter: application", "Name", req.Name)
 
 	// Lookup K8s node object for this bpfman-agent This should always succeed
 	if err := r.Get(ctx, types.NamespacedName{Namespace: v1.NamespaceAll, Name: r.NodeName}, r.ourNode); err != nil {
@@ -66,6 +80,7 @@ func (r *BpfApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	var res ctrl.Result
 	var err error
 	var complete bool
+	var lastRec bpfmanReconciler[bpfmaniov1alpha1.BpfProgram, bpfmaniov1alpha1.BpfProgramList]
 
 	buildProgramName := func(
 		app bpfmaniov1alpha1.BpfApplication,
@@ -89,15 +104,16 @@ func (r *BpfApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 					},
 				}
 				rec := &FentryProgramReconciler{
-					ReconcilerCommon:     r.ReconcilerCommon,
-					currentFentryProgram: &fentryProgram,
-					ourNode:              r.ourNode,
+					ClusterProgramReconciler: r.ClusterProgramReconciler,
+					currentFentryProgram:     &fentryProgram,
+					ourNode:                  r.ourNode,
 				}
 				rec.appOwner = &a
 				fentryObjects := []client.Object{&fentryProgram}
 				appProgramMap[appProgramId] = true
 				// Reconcile FentryProgram.
 				complete, res, err = r.reconcileCommon(ctx, rec, fentryObjects)
+				lastRec = rec
 
 			case bpfmaniov1alpha1.ProgTypeFexit:
 				appProgramId := fmt.Sprintf("%s-%s-%s", strings.ToLower(string(p.Type)), sanitize(p.Fexit.FunctionName), p.Fexit.BpfFunctionName)
@@ -111,15 +127,16 @@ func (r *BpfApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 					},
 				}
 				rec := &FexitProgramReconciler{
-					ReconcilerCommon:    r.ReconcilerCommon,
-					currentFexitProgram: &fexitProgram,
-					ourNode:             r.ourNode,
+					ClusterProgramReconciler: r.ClusterProgramReconciler,
+					currentFexitProgram:      &fexitProgram,
+					ourNode:                  r.ourNode,
 				}
 				rec.appOwner = &a
 				fexitObjects := []client.Object{&fexitProgram}
 				appProgramMap[appProgramId] = true
 				// Reconcile FexitProgram.
 				complete, res, err = r.reconcileCommon(ctx, rec, fexitObjects)
+				lastRec = rec
 
 			case bpfmaniov1alpha1.ProgTypeKprobe,
 				bpfmaniov1alpha1.ProgTypeKretprobe:
@@ -134,15 +151,16 @@ func (r *BpfApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 					},
 				}
 				rec := &KprobeProgramReconciler{
-					ReconcilerCommon:     r.ReconcilerCommon,
-					currentKprobeProgram: &kprobeProgram,
-					ourNode:              r.ourNode,
+					ClusterProgramReconciler: r.ClusterProgramReconciler,
+					currentKprobeProgram:     &kprobeProgram,
+					ourNode:                  r.ourNode,
 				}
 				rec.appOwner = &a
 				kprobeObjects := []client.Object{&kprobeProgram}
 				appProgramMap[appProgramId] = true
 				// Reconcile KprobeProgram or KpretprobeProgram.
 				complete, res, err = r.reconcileCommon(ctx, rec, kprobeObjects)
+				lastRec = rec
 
 			case bpfmaniov1alpha1.ProgTypeUprobe,
 				bpfmaniov1alpha1.ProgTypeUretprobe:
@@ -157,15 +175,16 @@ func (r *BpfApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 					},
 				}
 				rec := &UprobeProgramReconciler{
-					ReconcilerCommon:     r.ReconcilerCommon,
-					currentUprobeProgram: &uprobeProgram,
-					ourNode:              r.ourNode,
+					ClusterProgramReconciler: r.ClusterProgramReconciler,
+					currentUprobeProgram:     &uprobeProgram,
+					ourNode:                  r.ourNode,
 				}
 				rec.appOwner = &a
 				uprobeObjects := []client.Object{&uprobeProgram}
 				appProgramMap[appProgramId] = true
 				// Reconcile UprobeProgram or UpretprobeProgram.
 				complete, res, err = r.reconcileCommon(ctx, rec, uprobeObjects)
+				lastRec = rec
 
 			case bpfmaniov1alpha1.ProgTypeTracepoint:
 				appProgramId := fmt.Sprintf("%s-%s", strings.ToLower(string(p.Type)), p.Tracepoint.BpfFunctionName)
@@ -179,7 +198,7 @@ func (r *BpfApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 					},
 				}
 				rec := &TracepointProgramReconciler{
-					ReconcilerCommon:         r.ReconcilerCommon,
+					ClusterProgramReconciler: r.ClusterProgramReconciler,
 					currentTracepointProgram: &tracepointProgram,
 					ourNode:                  r.ourNode,
 				}
@@ -188,11 +207,12 @@ func (r *BpfApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 				appProgramMap[appProgramId] = true
 				// Reconcile TracepointProgram.
 				complete, res, err = r.reconcileCommon(ctx, rec, tracepointObjects)
+				lastRec = rec
 
 			case bpfmaniov1alpha1.ProgTypeTC:
 				_, ifErr := getInterfaces(&p.TC.InterfaceSelector, r.ourNode)
 				if ifErr != nil {
-					ctxLogger.Error(ifErr, "failed to get interfaces for TC Program",
+					r.Logger.Error(ifErr, "failed to get interfaces for TC Program",
 						"app program name", a.Name, "program index", j)
 					continue
 				}
@@ -207,20 +227,21 @@ func (r *BpfApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 					},
 				}
 				rec := &TcProgramReconciler{
-					ReconcilerCommon: r.ReconcilerCommon,
-					currentTcProgram: &tcProgram,
-					ourNode:          r.ourNode,
+					ClusterProgramReconciler: r.ClusterProgramReconciler,
+					currentTcProgram:         &tcProgram,
+					ourNode:                  r.ourNode,
 				}
 				rec.appOwner = &a
 				tcObjects := []client.Object{&tcProgram}
 				appProgramMap[appProgramId] = true
 				// Reconcile TcProgram.
 				complete, res, err = r.reconcileCommon(ctx, rec, tcObjects)
+				lastRec = rec
 
 			case bpfmaniov1alpha1.ProgTypeTCX:
 				_, ifErr := getInterfaces(&p.TCX.InterfaceSelector, r.ourNode)
 				if ifErr != nil {
-					ctxLogger.Error(ifErr, "failed to get interfaces for TCX Program",
+					r.Logger.Error(ifErr, "failed to get interfaces for TCX Program",
 						"app program name", a.Name, "program index", j)
 					continue
 				}
@@ -235,20 +256,21 @@ func (r *BpfApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 					},
 				}
 				rec := &TcxProgramReconciler{
-					ReconcilerCommon:  r.ReconcilerCommon,
-					currentTcxProgram: &tcxProgram,
-					ourNode:           r.ourNode,
+					ClusterProgramReconciler: r.ClusterProgramReconciler,
+					currentTcxProgram:        &tcxProgram,
+					ourNode:                  r.ourNode,
 				}
 				rec.appOwner = &a
 				tcxObjects := []client.Object{&tcxProgram}
 				appProgramMap[appProgramId] = true
 				// Reconcile TcxProgram.
 				complete, res, err = r.reconcileCommon(ctx, rec, tcxObjects)
+				lastRec = rec
 
 			case bpfmaniov1alpha1.ProgTypeXDP:
 				_, ifErr := getInterfaces(&p.XDP.InterfaceSelector, r.ourNode)
 				if ifErr != nil {
-					ctxLogger.Error(ifErr, "failed to get interfaces for XDP Program",
+					r.Logger.Error(ifErr, "failed to get interfaces for XDP Program",
 						"app program name", a.Name, "program index", j)
 					continue
 				}
@@ -263,23 +285,24 @@ func (r *BpfApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 					},
 				}
 				rec := &XdpProgramReconciler{
-					ReconcilerCommon:  r.ReconcilerCommon,
-					currentXdpProgram: &xdpProgram,
-					ourNode:           r.ourNode,
+					ClusterProgramReconciler: r.ClusterProgramReconciler,
+					currentXdpProgram:        &xdpProgram,
+					ourNode:                  r.ourNode,
 				}
 				rec.appOwner = &a
 				xdpObjects := []client.Object{&xdpProgram}
 				appProgramMap[appProgramId] = true
 				// Reconcile XdpProgram.
 				complete, res, err = r.reconcileCommon(ctx, rec, xdpObjects)
+				lastRec = rec
 
 			default:
-				ctxLogger.Error(fmt.Errorf("unsupported bpf program type"), "unsupported bpf program type", "ProgType", p.Type)
+				r.Logger.Error(fmt.Errorf("unsupported bpf program type"), "unsupported bpf program type", "ProgType", p.Type)
 				// Skip this program and continue to the next one
 				continue
 			}
 
-			ctxLogger.V(1).Info("Reconcile Application", "Application", i, "Program", j, "Name", a.Name,
+			r.Logger.V(1).Info("Reconcile Application", "Application", i, "Program", j, "Name", a.Name,
 				"type", p.Type, "Complete", complete, "Result", res, "Error", err)
 
 			if complete {
@@ -296,20 +319,20 @@ func (r *BpfApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 			// find programs that need to be deleted and delete them
 			opts := []client.ListOption{client.MatchingLabels{internal.BpfProgramOwner: a.Name}}
 			if err := r.List(ctx, bpfPrograms, opts...); err != nil {
-				ctxLogger.Error(err, "failed to get freshPrograms for full reconcile")
+				r.Logger.Error(err, "failed to get freshPrograms for full reconcile")
 				return ctrl.Result{}, err
 			}
 			for _, bpfProgram := range bpfPrograms.Items {
 				id := bpfProgram.Labels[internal.AppProgramId]
 				if _, ok := appProgramMap[id]; !ok {
-					ctxLogger.Info("Deleting BpfProgram", "AppProgramId", id, "BpfProgram", bpfProgram.Name)
+					r.Logger.Info("Deleting BpfProgram", "AppProgramId", id, "BpfProgram", bpfProgram.Name)
 					bpfDeletedPrograms.Items = append(bpfDeletedPrograms.Items, bpfProgram)
 				}
 			}
 			// Delete BpfPrograms that are no longer needed
-			res, err = r.unLoadAndDeleteBpfProgramsList(ctx, bpfDeletedPrograms, internal.BpfApplicationControllerFinalizer)
+			res, err = r.unLoadAndDeleteBpfProgramsList(ctx, lastRec, bpfDeletedPrograms, internal.BpfApplicationControllerFinalizer)
 			if err != nil {
-				ctxLogger.Error(err, "failed to delete programs")
+				r.Logger.Error(err, "failed to delete programs")
 				return ctrl.Result{}, err
 			}
 			// We've completed reconciling all programs for this application, continue to the next one

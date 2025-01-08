@@ -26,32 +26,93 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
-	bpfmaniov1alpha1 "github.com/bpfman/bpfman-operator/apis/v1alpha1"
-	"github.com/bpfman/bpfman-operator/internal"
 	"github.com/buger/jsonparser"
 	"github.com/go-logr/logr"
 )
 
+type ContainerInfo struct {
+	podName       string
+	containerName string
+	pid           int64
+}
+
+// Create an interface for getting the list of containers in which the program
+// should be attached so we can mock it in unit tests.
+type ContainerGetter interface {
+	// Get the list of containers on this node that match the containerSelector.
+	GetContainers(ctx context.Context,
+		selectorNamespace string,
+		selectorPods metav1.LabelSelector,
+		selectorContainerNames *[]string,
+		logger logr.Logger) (*[]ContainerInfo, error)
+}
+
+type RealContainerGetter struct {
+	nodeName  string
+	clientSet kubernetes.Interface
+}
+
+func NewRealContainerGetter(nodeName string) (*RealContainerGetter, error) {
+	clientSet, err := getClientset()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get clientset: %v", err)
+	}
+
+	containerGetter := RealContainerGetter{
+		nodeName:  nodeName,
+		clientSet: clientSet,
+	}
+
+	return &containerGetter, nil
+}
+
+func (c *RealContainerGetter) GetContainers(
+	ctx context.Context,
+	selectorNamespace string,
+	selectorPods metav1.LabelSelector,
+	selectorContainerNames *[]string,
+	logger logr.Logger) (*[]ContainerInfo, error) {
+
+	// Get the list of pods that match the selector.
+	podList, err := c.getPodsForNode(ctx, selectorNamespace, selectorPods)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get pod list: %v", err)
+	}
+
+	// Get the list of containers in the list of pods that match the selector.
+	containerList, err := getContainerInfo(podList, selectorContainerNames, logger)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get container info: %v", err)
+	}
+
+	logger.V(1).Info("from getContainerInfo", "containers", containerList)
+
+	return containerList, nil
+}
+
 // getPodsForNode returns a list of pods on the given node that match the given
 // container selector.
-func getPodsForNode(ctx context.Context, clientset kubernetes.Interface,
-	containerSelector *bpfmaniov1alpha1.ContainerSelector, nodeName string) (*v1.PodList, error) {
+func (c *RealContainerGetter) getPodsForNode(
+	ctx context.Context,
+	selectorNamespace string,
+	selectorPods metav1.LabelSelector,
+) (*v1.PodList, error) {
 
-	selectorString := metav1.FormatLabelSelector(&containerSelector.Pods)
+	selectorString := metav1.FormatLabelSelector(&selectorPods)
 
 	if selectorString == "<error>" {
 		return nil, fmt.Errorf("error parsing selector: %v", selectorString)
 	}
 
 	listOptions := metav1.ListOptions{
-		FieldSelector: "spec.nodeName=" + nodeName,
+		FieldSelector: "spec.nodeName=" + c.nodeName,
 	}
 
 	if selectorString != "<none>" {
 		listOptions.LabelSelector = selectorString
 	}
 
-	podList, err := clientset.CoreV1().Pods(containerSelector.Namespace).List(ctx, listOptions)
+	podList, err := c.clientSet.CoreV1().Pods(selectorNamespace).List(ctx, listOptions)
 	if err != nil {
 		return nil, fmt.Errorf("error getting pod list: %v", err)
 	}
@@ -59,18 +120,12 @@ func getPodsForNode(ctx context.Context, clientset kubernetes.Interface,
 	return podList, nil
 }
 
-type containerInfo struct {
-	podName       string
-	containerName string
-	pid           int64
-}
-
 // getContainerInfo returns a list of containerInfo for the given pod list and container names.
-func getContainerInfo(podList *v1.PodList, containerNames *[]string, logger logr.Logger) (*[]containerInfo, error) {
+func getContainerInfo(podList *v1.PodList, containerNames *[]string, logger logr.Logger) (*[]ContainerInfo, error) {
 
 	crictl := "/usr/local/bin/crictl"
 
-	containers := []containerInfo{}
+	containers := []ContainerInfo{}
 
 	for i, pod := range podList.Items {
 		logger.V(1).Info("Pod", "index", i, "Name", pod.Name, "Namespace", pod.Namespace, "NodeName", pod.Spec.NodeName)
@@ -166,7 +221,7 @@ func getContainerInfo(podList *v1.PodList, containerNames *[]string, logger logr
 				continue
 			}
 
-			container := containerInfo{
+			container := ContainerInfo{
 				podName:       pod.Name,
 				containerName: containerName,
 				pid:           containerPid,
@@ -182,12 +237,13 @@ func getContainerInfo(podList *v1.PodList, containerNames *[]string, logger logr
 
 // Check if the annotation is set to indicate that no containers on this node
 // matched the container selector.
-func noContainersOnNode(bpfProgram *bpfmaniov1alpha1.BpfProgram) bool {
+func noContainersOnNode[T BpfProg](bpfProgram *T, annotationIndex string) bool {
 	if bpfProgram == nil {
 		return false
 	}
 
-	noContainersOnNode, ok := bpfProgram.Annotations[internal.UprobeNoContainersOnNode]
+	annotations := (*bpfProgram).GetAnnotations()
+	noContainersOnNode, ok := annotations[annotationIndex]
 	if ok && noContainersOnNode == "true" {
 		return true
 	}

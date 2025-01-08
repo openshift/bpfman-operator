@@ -14,11 +14,14 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+//lint:file-ignore U1000 Linter claims functions unused, but are required for generic
+
 package bpfmanagent
 
 import (
 	"context"
 	"fmt"
+	"strconv"
 
 	bpfmaniov1alpha1 "github.com/bpfman/bpfman-operator/apis/v1alpha1"
 	bpfmanagentinternal "github.com/bpfman/bpfman-operator/controllers/bpfman-agent/internal"
@@ -32,7 +35,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
-	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
 
@@ -41,7 +43,7 @@ import (
 // TcProgramReconciler reconciles a tcProgram object by creating multiple
 // bpfProgram objects and managing bpfman for each one.
 type TcProgramReconciler struct {
-	ReconcilerCommon
+	ClusterProgramReconciler
 	currentTcProgram *bpfmaniov1alpha1.TcProgram
 	interfaces       []string
 	ourNode          *v1.Node
@@ -69,6 +71,14 @@ func (r *TcProgramReconciler) getProgType() internal.ProgramType {
 
 func (r *TcProgramReconciler) getName() string {
 	return r.currentTcProgram.Name
+}
+
+func (r *TcProgramReconciler) getNamespace() string {
+	return r.currentTcProgram.Namespace
+}
+
+func (r *TcProgramReconciler) getNoContAnnotationIndex() string {
+	return internal.TcNoContainersOnNode
 }
 
 func (r *TcProgramReconciler) getNode() *v1.Node {
@@ -167,21 +177,93 @@ func (r *TcProgramReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			&handler.EnqueueRequestForObject{},
 			builder.WithPredicates(predicate.And(predicate.LabelChangedPredicate{}, nodePredicate(r.NodeName))),
 		).
+		// Watch for changes in Pod resources in case we are using a container selector.
+		Watches(
+			&v1.Pod{},
+			&handler.EnqueueRequestForObject{},
+			builder.WithPredicates(podOnNodePredicate(r.NodeName)),
+		).
 		Complete(r)
 }
 
 func (r *TcProgramReconciler) getExpectedBpfPrograms(ctx context.Context) (*bpfmaniov1alpha1.BpfProgramList, error) {
 	progs := &bpfmaniov1alpha1.BpfProgramList{}
-	for _, iface := range r.interfaces {
-		attachPoint := iface + "-" + r.currentTcProgram.Spec.Direction
-		annotations := map[string]string{internal.TcProgramInterface: iface}
 
-		prog, err := r.createBpfProgram(attachPoint, r, annotations)
+	if r.currentTcProgram.Spec.Containers != nil {
+
+		// There is a container selector, so see if there are any matching
+		// containers on this node.
+		containerInfo, err := r.Containers.GetContainers(
+			ctx,
+			r.currentTcProgram.Spec.Containers.Namespace,
+			r.currentTcProgram.Spec.Containers.Pods,
+			r.currentTcProgram.Spec.Containers.ContainerNames,
+			r.Logger,
+		)
 		if err != nil {
-			return nil, fmt.Errorf("failed to create BpfProgram %s: %v", attachPoint, err)
+			return nil, fmt.Errorf("failed to get container pids: %v", err)
 		}
 
-		progs.Items = append(progs.Items, *prog)
+		if containerInfo == nil || len(*containerInfo) == 0 {
+			// There were no errors, but the container selector didn't
+			// select any containers on this node.
+			for _, iface := range r.interfaces {
+				attachPoint := fmt.Sprintf("%s-%s-%s",
+					iface,
+					r.currentTcProgram.Spec.Direction,
+					"no-containers-on-node",
+				)
+
+				annotations := map[string]string{
+					internal.TcProgramInterface:   iface,
+					internal.TcNoContainersOnNode: "true",
+				}
+
+				prog, err := r.createBpfProgram(attachPoint, r, annotations)
+				if err != nil {
+					return nil, fmt.Errorf("failed to create BpfProgram %s: %v", attachPoint, err)
+				}
+
+				progs.Items = append(progs.Items, *prog)
+			}
+		} else {
+			// Containers were found, so create bpfPrograms.
+			for i := range *containerInfo {
+				container := (*containerInfo)[i]
+				for _, iface := range r.interfaces {
+					attachPoint := fmt.Sprintf("%s-%s-%s-%s",
+						iface,
+						r.currentTcProgram.Spec.Direction,
+						container.podName,
+						container.containerName,
+					)
+
+					annotations := map[string]string{
+						internal.TcProgramInterface: iface,
+						internal.TcContainerPid:     strconv.FormatInt(container.pid, 10),
+					}
+
+					prog, err := r.createBpfProgram(attachPoint, r, annotations)
+					if err != nil {
+						return nil, fmt.Errorf("failed to create BpfProgram %s: %v", attachPoint, err)
+					}
+
+					progs.Items = append(progs.Items, *prog)
+				}
+			}
+		}
+	} else {
+		for _, iface := range r.interfaces {
+			attachPoint := iface + "-" + r.currentTcProgram.Spec.Direction
+			annotations := map[string]string{internal.TcProgramInterface: iface}
+
+			prog, err := r.createBpfProgram(attachPoint, r, annotations)
+			if err != nil {
+				return nil, fmt.Errorf("failed to create BpfProgram %s: %v", attachPoint, err)
+			}
+
+			progs.Items = append(progs.Items, *prog)
+		}
 	}
 
 	return progs, nil
@@ -195,8 +277,7 @@ func (r *TcProgramReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	r.ourNode = &v1.Node{}
 	r.Logger = ctrl.Log.WithName("tc")
 
-	ctxLogger := log.FromContext(ctx)
-	ctxLogger.Info("Reconcile TC: Enter", "ReconcileKey", req)
+	r.Logger.Info("bpfman-agent enter: tc", "Name", req.Name)
 
 	// Lookup K8s node object for this bpfman-agent This should always succeed
 	if err := r.Get(ctx, types.NamespacedName{Namespace: v1.NamespaceAll, Name: r.NodeName}, r.ourNode); err != nil {
@@ -235,18 +316,26 @@ func (r *TcProgramReconciler) getLoadRequest(bpfProgram *bpfmaniov1alpha1.BpfPro
 		return nil, fmt.Errorf("failed to process bytecode selector: %v", err)
 	}
 
+	attachInfo := &gobpfman.TCAttachInfo{
+		Priority:  r.currentTcProgram.Spec.Priority,
+		Iface:     bpfProgram.Annotations[internal.TcProgramInterface],
+		Direction: r.currentTcProgram.Spec.Direction,
+		ProceedOn: tcProceedOnToInt(r.currentTcProgram.Spec.ProceedOn),
+	}
+
+	containerPidStr, ok := bpfProgram.Annotations[internal.TcContainerPid]
+	if ok {
+		netns := fmt.Sprintf("/host/proc/%s/ns/net", containerPidStr)
+		attachInfo.Netns = &netns
+	}
+
 	loadRequest := gobpfman.LoadRequest{
 		Bytecode:    bytecode,
 		Name:        r.currentTcProgram.Spec.BpfFunctionName,
 		ProgramType: uint32(internal.Tc),
 		Attach: &gobpfman.AttachInfo{
 			Info: &gobpfman.AttachInfo_TcAttachInfo{
-				TcAttachInfo: &gobpfman.TCAttachInfo{
-					Priority:  r.currentTcProgram.Spec.Priority,
-					Iface:     bpfProgram.Annotations[internal.TcProgramInterface],
-					Direction: r.currentTcProgram.Spec.Direction,
-					ProceedOn: tcProceedOnToInt(r.currentTcProgram.Spec.ProceedOn),
-				},
+				TcAttachInfo: attachInfo,
 			},
 		},
 		Metadata:   map[string]string{internal.UuidMetadataKey: string(bpfProgram.UID), internal.ProgramNameKey: r.getOwner().GetName()},

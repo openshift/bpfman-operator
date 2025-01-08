@@ -14,6 +14,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+//lint:file-ignore U1000 Linter claims functions unused, but are required for generic
+
 package bpfmanagent
 
 import (
@@ -32,7 +34,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
-	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
 
@@ -40,7 +41,7 @@ import (
 
 // BpfProgramReconciler reconciles a BpfProgram object
 type FentryProgramReconciler struct {
-	ReconcilerCommon
+	ClusterProgramReconciler
 	currentFentryProgram *bpfmaniov1alpha1.FentryProgram
 	ourNode              *v1.Node
 }
@@ -67,6 +68,14 @@ func (r *FentryProgramReconciler) getProgType() internal.ProgramType {
 
 func (r *FentryProgramReconciler) getName() string {
 	return r.currentFentryProgram.Name
+}
+
+func (r *FentryProgramReconciler) getNamespace() string {
+	return r.currentFentryProgram.Namespace
+}
+
+func (r *FentryProgramReconciler) getNoContAnnotationIndex() string {
+	return internal.FentryNoContainersOnNode
 }
 
 func (r *FentryProgramReconciler) getNode() *v1.Node {
@@ -149,8 +158,7 @@ func (r *FentryProgramReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	r.ourNode = &v1.Node{}
 	r.Logger = ctrl.Log.WithName("fentry")
 
-	ctxLogger := log.FromContext(ctx)
-	ctxLogger.Info("Reconcile Fentry: Enter", "ReconcileKey", req)
+	r.Logger.Info("bpfman-agent enter: fentry", "Name", req.Name)
 
 	// Lookup K8s node object for this bpfman-agent This should always succeed
 	if err := r.Get(ctx, types.NamespacedName{Namespace: v1.NamespaceAll, Name: r.NodeName}, r.ourNode); err != nil {

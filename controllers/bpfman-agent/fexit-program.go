@@ -14,6 +14,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+//lint:file-ignore U1000 Linter claims functions unused, but are required for generic
+
 package bpfmanagent
 
 import (
@@ -32,7 +34,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
-	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
 
@@ -40,7 +41,7 @@ import (
 
 // BpfProgramReconciler reconciles a BpfProgram object
 type FexitProgramReconciler struct {
-	ReconcilerCommon
+	ClusterProgramReconciler
 	currentFexitProgram *bpfmaniov1alpha1.FexitProgram
 	ourNode             *v1.Node
 }
@@ -67,6 +68,14 @@ func (r *FexitProgramReconciler) getProgType() internal.ProgramType {
 
 func (r *FexitProgramReconciler) getName() string {
 	return r.currentFexitProgram.Name
+}
+
+func (r *FexitProgramReconciler) getNamespace() string {
+	return r.currentFexitProgram.Namespace
+}
+
+func (r *FexitProgramReconciler) getNoContAnnotationIndex() string {
+	return internal.FexitNoContainersOnNode
 }
 
 func (r *FexitProgramReconciler) getNode() *v1.Node {
@@ -149,8 +158,7 @@ func (r *FexitProgramReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	r.ourNode = &v1.Node{}
 	r.Logger = ctrl.Log.WithName("fexit")
 
-	ctxLogger := log.FromContext(ctx)
-	ctxLogger.Info("Reconcile Fexit: Enter", "ReconcileKey", req)
+	r.Logger.Info("bpfman-agent enter: fexit", "Name", req.Name)
 
 	// Lookup K8s node object for this bpfman-agent This should always succeed
 	if err := r.Get(ctx, types.NamespacedName{Namespace: v1.NamespaceAll, Name: r.NodeName}, r.ourNode); err != nil {

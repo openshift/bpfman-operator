@@ -11,6 +11,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+//lint:file-ignore U1000 Linter claims functions unused, but are required for generic
+
 package bpfmanoperator
 
 import (
@@ -27,16 +29,15 @@ import (
 	bpfmaniov1alpha1 "github.com/bpfman/bpfman-operator/apis/v1alpha1"
 	"github.com/bpfman/bpfman-operator/internal"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
-	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
 
 type TcxProgramReconciler struct {
-	ReconcilerCommon
+	ClusterProgramReconciler
 }
 
-func (r *TcxProgramReconciler) getRecCommon() *ReconcilerCommon {
-	return &r.ReconcilerCommon
+func (r *TcxProgramReconciler) getRecCommon() *ReconcilerCommon[bpfmaniov1alpha1.BpfProgram, bpfmaniov1alpha1.BpfProgramList] {
+	return &r.ClusterProgramReconciler.ReconcilerCommon
 }
 
 func (r *TcxProgramReconciler) getFinalizer() string {
@@ -51,7 +52,7 @@ func (r *TcxProgramReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Watches(
 			&bpfmaniov1alpha1.BpfProgram{},
 			&handler.EnqueueRequestForObject{},
-			builder.WithPredicates(predicate.And(statusChangedPredicate(), internal.BpfProgramTypePredicate(internal.TcxString))),
+			builder.WithPredicates(predicate.And(statusChangedPredicateCluster(), internal.BpfProgramTypePredicate(internal.TcxString))),
 		).
 		Complete(r)
 }
@@ -61,7 +62,8 @@ func (r *TcxProgramReconciler) SetupWithManager(mgr ctrl.Manager) error {
 //+kubebuilder:rbac:groups=bpfman.io,resources=tcxprograms/finalizers,verbs=update
 
 func (r *TcxProgramReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	r.Logger = log.FromContext(ctx)
+	r.Logger = ctrl.Log.WithName("tcx")
+	r.Logger.Info("bpfman-operator enter: tcx", "Name", req.NamespacedName.Name)
 
 	tcxProgram := &bpfmaniov1alpha1.TcxProgram{}
 	if err := r.Get(ctx, req.NamespacedName, tcxProgram); err != nil {
@@ -101,7 +103,7 @@ func (r *TcxProgramReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	return reconcileBpfProgram(ctx, r, tcxProgram)
 }
 
-func (r *TcxProgramReconciler) updateStatus(ctx context.Context, name string, cond bpfmaniov1alpha1.ProgramConditionType, message string) (ctrl.Result, error) {
+func (r *TcxProgramReconciler) updateStatus(ctx context.Context, _namespace string, name string, cond bpfmaniov1alpha1.ProgramConditionType, message string) (ctrl.Result, error) {
 	// Sometimes we end up with a stale TcxProgram due to races, do this
 	// get to ensure we're up to date before attempting a finalizer removal.
 	prog := &bpfmaniov1alpha1.TcxProgram{}
