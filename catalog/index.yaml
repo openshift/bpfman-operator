@@ -18,6 +18,16 @@ properties:
 - type: olm.gvk
   value:
     group: bpfman.io
+    kind: BpfNsApplication
+    version: v1alpha1
+- type: olm.gvk
+  value:
+    group: bpfman.io
+    kind: BpfNsProgram
+    version: v1alpha1
+- type: olm.gvk
+  value:
+    group: bpfman.io
     kind: BpfProgram
     version: v1alpha1
 - type: olm.gvk
@@ -38,7 +48,22 @@ properties:
 - type: olm.gvk
   value:
     group: bpfman.io
+    kind: TcNsProgram
+    version: v1alpha1
+- type: olm.gvk
+  value:
+    group: bpfman.io
     kind: TcProgram
+    version: v1alpha1
+- type: olm.gvk
+  value:
+    group: bpfman.io
+    kind: TcxNsProgram
+    version: v1alpha1
+- type: olm.gvk
+  value:
+    group: bpfman.io
+    kind: TcxProgram
     version: v1alpha1
 - type: olm.gvk
   value:
@@ -48,7 +73,17 @@ properties:
 - type: olm.gvk
   value:
     group: bpfman.io
+    kind: UprobeNsProgram
+    version: v1alpha1
+- type: olm.gvk
+  value:
+    group: bpfman.io
     kind: UprobeProgram
+    version: v1alpha1
+- type: olm.gvk
+  value:
+    group: bpfman.io
+    kind: XdpNsProgram
     version: v1alpha1
 - type: olm.gvk
   value:
@@ -162,6 +197,96 @@ properties:
           },
           {
             "apiVersion": "bpfman.io/v1alpha1",
+            "kind": "BpfNsApplication",
+            "metadata": {
+              "labels": {
+                "app.kubernetes.io/name": "bpfnsapplication"
+              },
+              "name": "bpfapplication-sample",
+              "namespace": "acme"
+            },
+            "spec": {
+              "bytecode": {
+                "image": {
+                  "url": "quay.io/bpfman-bytecode/go-app-counter:latest"
+                }
+              },
+              "nodeselector": {},
+              "programs": [
+                {
+                  "tc": {
+                    "bpffunctionname": "stats",
+                    "containers": {
+                      "pods": {
+                        "matchLabels": {
+                          "app": "nginx"
+                        }
+                      }
+                    },
+                    "direction": "ingress",
+                    "interfaceselector": {
+                      "primarynodeinterface": true
+                    },
+                    "priority": 55
+                  },
+                  "type": "TC"
+                },
+                {
+                  "tcx": {
+                    "bpffunctionname": "tcx_stats",
+                    "containers": {
+                      "pods": {
+                        "matchLabels": {
+                          "app": "nginx"
+                        }
+                      }
+                    },
+                    "direction": "ingress",
+                    "interfaceselector": {
+                      "primarynodeinterface": true
+                    },
+                    "priority": 500
+                  },
+                  "type": "TCX"
+                },
+                {
+                  "type": "Uprobe",
+                  "uprobe": {
+                    "bpffunctionname": "uprobe_counter",
+                    "containers": {
+                      "pods": {
+                        "matchLabels": {
+                          "app": "nginx"
+                        }
+                      }
+                    },
+                    "func_name": "malloc",
+                    "retprobe": false,
+                    "target": "libc"
+                  }
+                },
+                {
+                  "type": "XDP",
+                  "xdp": {
+                    "bpffunctionname": "xdp_stats",
+                    "containers": {
+                      "pods": {
+                        "matchLabels": {
+                          "app": "nginx"
+                        }
+                      }
+                    },
+                    "interfaceselector": {
+                      "primarynodeinterface": true
+                    },
+                    "priority": 55
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "apiVersion": "bpfman.io/v1alpha1",
             "kind": "FentryProgram",
             "metadata": {
               "labels": {
@@ -235,6 +360,54 @@ properties:
           },
           {
             "apiVersion": "bpfman.io/v1alpha1",
+            "kind": "TcNsProgram",
+            "metadata": {
+              "labels": {
+                "app.kubernetes.io/name": "tcnsprogram"
+              },
+              "name": "tc-containers",
+              "namespace": "acme"
+            },
+            "spec": {
+              "bpffunctionname": "pass",
+              "bytecode": {
+                "image": {
+                  "url": "quay.io/bpfman-bytecode/tc_pass:latest"
+                }
+              },
+              "containers": {
+                "containernames": [
+                  "nginx"
+                ],
+                "pods": {
+                  "matchLabels": {
+                    "app": "nginx"
+                  }
+                }
+              },
+              "direction": "ingress",
+              "globaldata": {
+                "GLOBAL_u32": [
+                  13,
+                  12,
+                  11,
+                  10
+                ],
+                "GLOBAL_u8": [
+                  1
+                ]
+              },
+              "interfaceselector": {
+                "interfaces": [
+                  "eth0"
+                ]
+              },
+              "nodeselector": {},
+              "priority": 0
+            }
+          },
+          {
+            "apiVersion": "bpfman.io/v1alpha1",
             "kind": "TcProgram",
             "metadata": {
               "labels": {
@@ -247,6 +420,89 @@ properties:
               "bytecode": {
                 "image": {
                   "url": "quay.io/bpfman-bytecode/tc_pass:latest"
+                }
+              },
+              "direction": "ingress",
+              "globaldata": {
+                "GLOBAL_u32": [
+                  13,
+                  12,
+                  11,
+                  10
+                ],
+                "GLOBAL_u8": [
+                  1
+                ]
+              },
+              "interfaceselector": {
+                "primarynodeinterface": true
+              },
+              "nodeselector": {},
+              "priority": 0
+            }
+          },
+          {
+            "apiVersion": "bpfman.io/v1alpha1",
+            "kind": "TcxNsProgram",
+            "metadata": {
+              "labels": {
+                "app.kubernetes.io/name": "tcxnsprogram"
+              },
+              "name": "tcx-containers",
+              "namespace": "acme"
+            },
+            "spec": {
+              "bpffunctionname": "tcx_next",
+              "bytecode": {
+                "image": {
+                  "url": "quay.io/bpfman-bytecode/tcx_test:latest"
+                }
+              },
+              "containers": {
+                "containernames": [
+                  "nginx"
+                ],
+                "pods": {
+                  "matchLabels": {
+                    "app": "nginx"
+                  }
+                }
+              },
+              "direction": "ingress",
+              "globaldata": {
+                "GLOBAL_u32": [
+                  13,
+                  12,
+                  11,
+                  10
+                ],
+                "GLOBAL_u8": [
+                  1
+                ]
+              },
+              "interfaceselector": {
+                "interfaces": [
+                  "eth0"
+                ]
+              },
+              "nodeselector": {},
+              "priority": 0
+            }
+          },
+          {
+            "apiVersion": "bpfman.io/v1alpha1",
+            "kind": "TcxProgram",
+            "metadata": {
+              "labels": {
+                "app.kubernetes.io/name": "tcxprogram"
+              },
+              "name": "tcx-pass-all-nodes"
+            },
+            "spec": {
+              "bpffunctionname": "tcx_pass",
+              "bytecode": {
+                "image": {
+                  "url": "quay.io/bpfman-bytecode/tcx_test:latest"
                 }
               },
               "direction": "ingress",
@@ -303,6 +559,50 @@ properties:
           },
           {
             "apiVersion": "bpfman.io/v1alpha1",
+            "kind": "UprobeNsProgram",
+            "metadata": {
+              "labels": {
+                "app.kubernetes.io/name": "uprobensprogram"
+              },
+              "name": "uprobe-example",
+              "namespace": "acme"
+            },
+            "spec": {
+              "bpffunctionname": "my_uprobe",
+              "bytecode": {
+                "image": {
+                  "url": "quay.io/bpfman-bytecode/uprobe:latest"
+                }
+              },
+              "containers": {
+                "containernames": [
+                  "nginx"
+                ],
+                "pods": {
+                  "matchLabels": {
+                    "app": "nginx"
+                  }
+                }
+              },
+              "func_name": "syscall",
+              "globaldata": {
+                "GLOBAL_u32": [
+                  13,
+                  12,
+                  11,
+                  10
+                ],
+                "GLOBAL_u8": [
+                  1
+                ]
+              },
+              "nodeselector": {},
+              "retprobe": false,
+              "target": "libc"
+            }
+          },
+          {
+            "apiVersion": "bpfman.io/v1alpha1",
             "kind": "UprobeProgram",
             "metadata": {
               "labels": {
@@ -332,6 +632,53 @@ properties:
               "nodeselector": {},
               "retprobe": false,
               "target": "libc"
+            }
+          },
+          {
+            "apiVersion": "bpfman.io/v1alpha1",
+            "kind": "XdpNsProgram",
+            "metadata": {
+              "labels": {
+                "app.kubernetes.io/name": "xdpnsprogram"
+              },
+              "name": "xdp-ns-pass-all-nodes",
+              "namespace": "acme"
+            },
+            "spec": {
+              "bpffunctionname": "pass",
+              "bytecode": {
+                "image": {
+                  "url": "quay.io/bpfman-bytecode/xdp_pass:latest"
+                }
+              },
+              "containers": {
+                "containernames": [
+                  "nginx"
+                ],
+                "pods": {
+                  "matchLabels": {
+                    "app": "nginx"
+                  }
+                }
+              },
+              "globaldata": {
+                "GLOBAL_u32": [
+                  13,
+                  12,
+                  11,
+                  10
+                ],
+                "GLOBAL_u8": [
+                  1
+                ]
+              },
+              "interfaceselector": {
+                "interfaces": [
+                  "eth0"
+                ]
+              },
+              "nodeselector": {},
+              "priority": 0
             }
           },
           {
@@ -372,7 +719,7 @@ properties:
       capabilities: Basic Install
       categories: OpenShift Optional
       containerImage: quay.io/bpfman/bpfman-operator:latest
-      createdAt: "2024-12-20T12:36:07Z"
+      createdAt: "2025-01-03T19:50:49Z"
       features.operators.openshift.io/cnf: "false"
       features.operators.openshift.io/cni: "false"
       features.operators.openshift.io/csi: "true"
@@ -414,6 +761,16 @@ properties:
         kind: BpfApplication
         name: bpfapplications.bpfman.io
         version: v1alpha1
+      - description: BpfNsApplication is the Schema for the BpfNsApplications API
+        displayName: Bpf Namespaced Application
+        kind: BpfNsApplication
+        name: bpfnsapplications.bpfman.io
+        version: v1alpha1
+      - description: BpfNsProgram is the Schema for the BpfNsProgram API
+        displayName: Bpf Namespaced Program
+        kind: BpfNsProgram
+        name: bpfnsprograms.bpfman.io
+        version: v1alpha1
       - description: BpfProgram is the Schema for the BpfProgram API
         displayName: Bpf Program
         kind: BpfProgram
@@ -434,12 +791,24 @@ properties:
         kind: KprobeProgram
         name: kprobeprograms.bpfman.io
         version: v1alpha1
+      - description: TcNsProgram is the Schema for the Tcnsprograms API
+        displayName: TC Namespaced Program
+        kind: TcNsProgram
+        name: tcnsprograms.bpfman.io
+        version: v1alpha1
       - description: TcProgram is the Schema for the Tcprograms API
-        displayName: Tc Program
+        displayName: TC Program
         kind: TcProgram
         name: tcprograms.bpfman.io
         version: v1alpha1
-      - kind: TcxProgram
+      - description: TcxNsProgram is the Schema for the Tcxnsprograms API
+        displayName: TCX Namespaced Program
+        kind: TcxNsProgram
+        name: tcxnsprograms.bpfman.io
+        version: v1alpha1
+      - description: TcxProgram is the Schema for the Tcxprograms API
+        displayName: TCX Program
+        kind: TcxProgram
         name: tcxprograms.bpfman.io
         version: v1alpha1
       - description: TracepointProgram is the Schema for the Tracepointprograms API
@@ -447,17 +816,27 @@ properties:
         kind: TracepointProgram
         name: tracepointprograms.bpfman.io
         version: v1alpha1
+      - description: UprobeNsProgram is the Schema for the Uprobensprograms API
+        displayName: Uprobe Namespaced Program
+        kind: UprobeNsProgram
+        name: uprobensprograms.bpfman.io
+        version: v1alpha1
       - description: UprobeProgram is the Schema for the Uprobeprograms API
         displayName: Uprobe Program
         kind: UprobeProgram
         name: uprobeprograms.bpfman.io
+        version: v1alpha1
+      - description: XdpNsProgram is the Schema for the Xdpnsprograms API
+        displayName: Xdp Namespaced Program
+        kind: XdpNsProgram
+        name: xdpnsprograms.bpfman.io
         version: v1alpha1
       - description: XdpProgram is the Schema for the Xdpprograms API
         displayName: Xdp Program
         kind: XdpProgram
         name: xdpprograms.bpfman.io
         version: v1alpha1
-    description: "The eBPF manager Operator is a Kubernetes Operator for deploying [bpfman](https://bpfman.netlify.app/),
+    description: "The eBPF Manager Operator is a Kubernetes Operator for deploying [bpfman](https://bpfman.netlify.app/),
       a system daemon\nfor managing eBPF programs. It deploys bpfman itself along
       with CRDs to make deploying\neBPF programs in Kubernetes much easier.\n\n##
       Quick Start\n\nTo get bpfman up and running quickly simply click 'install' to
@@ -465,15 +844,16 @@ properties:
       `bpfman-config` configmap is automatically created in the `bpfman` namespace
       and used to configure the bpfman deployment.\n\nTo edit the config simply run\n\n```bash\nkubectl
       edit cm bpfman-config\n```\n\nThe following fields are adjustable\n\n- `bpfman.agent.image`:
-      The image used for the bpfman-agent`\n-
-      `bpfman.image`: The image used for bpfman`\n-
+      The image used for the bpfman-agent`\n- `bpfman.image`: The image used for bpfman`\n-
       `bpfman.log.level`: the log level for bpfman, currently supports `debug`, `info`,
       `warn`, `error`, and `fatal`, defaults to `info`\n- `bpfman.agent.log.level`:
       the log level for the bpfman-agent currently supports `info`, `debug`, and `trace`
       \n\nThe bpfman operator deploys eBPF programs via CRDs. The following CRDs are
-      currently available, \n\n- XdpProgram\n- TcProgram\n- TcxProgram\n- TracepointProgram\n- KprobeProgram\n-
-      UprobeProgram\n- FentryProgram\n- FexitProgram\n\n## More information\n\nPlease
-      checkout the [bpfman community website](https://bpfman.io/) for more information."
+      currently available, \n\n- BpfApplication\n- FentryProgram\n- FexitProgram\n
+      - KprobeProgram\n- TcProgram\n- TcxProgram\n- TracepointProgram\n- UprobeProgram\n-
+      XdpProgram\n - BpfNsApplication\n- TcProgram\n- TcxNsProgram\n- UprobeNsProgram\n-
+      XdpNsProgram\n\n ## More information\n\nPlease checkout the [bpfman community
+      website](https://bpfman.io/) for more information."
     displayName: eBPF Manager Operator
     installModes:
     - supported: false
