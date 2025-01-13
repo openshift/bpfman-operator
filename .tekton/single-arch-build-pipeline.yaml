@@ -336,9 +336,6 @@ spec:
     - name: CHAINS-GIT_COMMIT
       description: ''
       value: "$(tasks.clone-repository.results.commit)"
-    - name: JAVA_COMMUNITY_DEPENDENCIES
-      description: ''
-      value: "$(tasks.build-container.results.JAVA_COMMUNITY_DEPENDENCIES)"
     finally:
     - name: show-sbom
       taskRef:
