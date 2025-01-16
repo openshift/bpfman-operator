@@ -1,7 +1,7 @@
 # Build the manager binary
 ARG BUILDPLATFORM
 
-FROM --platform=$BUILDPLATFORM brew.registry.redhat.io/rh-osbs/openshift-golang-builder:v1.22.5-202407301806.g4c8b32d.el9 AS bpfman-agent-build
+FROM --platform=$BUILDPLATFORM brew.registry.redhat.io/rh-osbs/openshift-golang-builder:v1.23 AS bpfman-agent-build
 
 # The following ARGs are set internally by docker/build-push-action in github actions
 ARG TARGETOS
@@ -24,8 +24,28 @@ COPY . .
 # by leaving it empty we can ensure that the container and binary shipped on it will have the same platform.
 RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -mod vendor -o bpfman-agent ./cmd/bpfman-agent/main.go
 
+FROM --platform=$BUILDPLATFORM brew.registry.redhat.io/rh-osbs/openshift-golang-builder:v1.23 AS cri-tools-build
+
+# The following ARGs are set internally by docker/build-push-action in github actions
+ARG TARGETOS
+ARG TARGETARCH
+ARG TARGETPLATFORM
+
+ARG BUILDPLATFORM
+
+RUN echo "TARGETOS=${TARGETOS}  TARGETARCH=${TARGETARCH}  BUILDPLATFORM=${BUILDPLATFORM}  TARGETPLATFORM=${TARGETPLATFORM}"
+
+WORKDIR /usr/src/cri-tools
+ARG CRI_REPO_URL=https://github.com/kubernetes-sigs/cri-tools
+ARG CRI_REPO_BRANCH=master
+
+RUN git clone --depth 1 --branch $CRI_REPO_BRANCH $CRI_REPO_URL .
+
+# Build
+RUN GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} VERSION="latest" make
+RUN cp ./build/bin/${TARGETOS}/${TARGETARCH}/crictl .
+
 FROM --platform=$TARGETPLATFORM registry.access.redhat.com/ubi9/ubi-minimal:9.5-1736404155
-ARG DNF_CMD="microdnf"
 
 ARG TARGETARCH
 ARG TARGETPLATFORM
@@ -34,12 +54,8 @@ WORKDIR /
 COPY --from=bpfman-agent-build /usr/src/bpfman-operator/bpfman-agent .
 
 # Install crictl
-RUN ${DNF_CMD} -y install wget tar gzip ca-certificates
-ARG VERSION="v1.31.0"
-RUN wget https://github.com/kubernetes-sigs/cri-tools/releases/download/${VERSION}/crictl-${VERSION}-linux-${TARGETARCH}.tar.gz
-RUN tar zxvf crictl-${VERSION}-linux-${TARGETARCH}.tar.gz -C /usr/local/bin
-RUN rm -f crictl-${VERSION}-linux-${TARGETARCH}.tar.gz
-RUN ${DNF_CMD} -y clean all
+COPY --from=cri-tools-build /usr/src/cri-tools/crictl /usr/local/bin
+RUN chmod +x /usr/local/bin/crictl
 
 LABEL name="bpfman/bpfman-agent" \
       com.redhat.component="bpfman-agent" \
