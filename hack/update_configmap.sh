@@ -3,9 +3,9 @@ set -eu
 
 #!/usr/bin/env bash
 
-export BPFMAN_AGENT_IMAGE_PULLSPEC="registry.redhat.io/bpfman/bpfman-agent@sha256:e525085f27aa795a866229c89593cb00c7e6a083a034c46798fc8270175837b0"
+export BPFMAN_AGENT_IMAGE_PULLSPEC="registry.redhat.io/bpfman/bpfman-agent@sha256:c9290de74ff425d8bad14976e86dee78ef82c1ce4ecfec131e28de1ec66baf97"
 
-export BPFMAN_IMAGE_PULLSPEC="registry.redhat.io/bpfman/bpfman@sha256:ba2d07440fd5f102a67ab87da676e0c66fc072bb0088823b6e650eccae80462a"
+export BPFMAN_IMAGE_PULLSPEC="registry.redhat.io/bpfman/bpfman@sha256:0fc407c20668ae1d6d9618a8ca331b33d225361604902d80d0850023d83f813c"
 
 export CONFIG_MAP=/manifests/bpfman-config_v1_configmap.yaml
 
