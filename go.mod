@@ -2,7 +2,7 @@ module github.com/bpfman/bpfman-operator
 
 go 1.22.0
 
-toolchain go1.22.2
+toolchain go1.24.0
 
 require (
 	github.com/bpfman/bpfman v0.5.5
