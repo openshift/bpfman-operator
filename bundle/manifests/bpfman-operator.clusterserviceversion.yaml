@@ -619,7 +619,7 @@ metadata:
     capabilities: Basic Install
     categories: OpenShift Optional
     containerImage: quay.io/bpfman/bpfman-operator:latest
-    createdAt: "2025-01-03T19:50:49Z"
+    createdAt: "2025-02-17T19:04:19Z"
     features.operators.openshift.io/cnf: "false"
     features.operators.openshift.io/cni: "false"
     features.operators.openshift.io/csi: "true"
@@ -658,7 +658,7 @@ metadata:
     operatorframework.io/arch.arm64: supported
     operatorframework.io/arch.ppc64le: supported
     operatorframework.io/arch.s390x: supported
-  name: bpfman-operator.v0.5.5
+  name: bpfman-operator.v0.5.6
   namespace: placeholder
 spec:
   apiservicedefinitions: {}
@@ -759,9 +759,9 @@ spec:
     \n\nThe bpfman operator deploys eBPF programs via CRDs. The following CRDs are
     currently available, \n\n- BpfApplication\n- FentryProgram\n- FexitProgram\n -
     KprobeProgram\n- TcProgram\n- TcxProgram\n- TracepointProgram\n- UprobeProgram\n-
-    XdpProgram\n - BpfNsApplication\n- TcProgram\n- TcxNsProgram\n- UprobeNsProgram\n-
-    XdpNsProgram\n\n ## More information\n\nPlease checkout the [bpfman community
-    website](https://bpfman.io/) for more information."
+    XdpProgram\n - BpfNsApplication\n- TcNsProgram\n- TcxNsProgram\n- UprobeNsProgram\n-
+    XdpNsProgram\n- BpfProgram\n - BpfNsProgram\n\n ## More information\n\nPlease
+    checkout the [bpfman community website](https://bpfman.io/) for more information."
   displayName: Bpfman Operator
   icon:
   - base64data: |
@@ -1815,4 +1815,4 @@ spec:
   provider:
     name: The bpfman Community
     url: https://bpfman.io/
-  version: 0.5.5
+  version: 0.5.6
