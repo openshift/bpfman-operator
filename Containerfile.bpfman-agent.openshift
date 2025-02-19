@@ -57,6 +57,8 @@ COPY --from=bpfman-agent-build /usr/src/bpfman-operator/bpfman-agent .
 COPY --from=cri-tools-build /usr/src/cri-tools/crictl /usr/local/bin
 RUN chmod +x /usr/local/bin/crictl
 
+RUN uname -srvmp
+
 LABEL name="bpfman/bpfman-agent" \
       com.redhat.component="bpfman-agent" \
       io.k8s.display-name="Bpfman Agent" \
