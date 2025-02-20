@@ -56,6 +56,7 @@ COPY --from=bpfman-agent-build /usr/src/bpfman-operator/bpfman-agent .
 # Install crictl
 COPY --from=cri-tools-build /usr/src/cri-tools/crictl /usr/local/bin
 RUN chmod +x /usr/local/bin/crictl
+COPY LICENSE /licenses/
 
 LABEL name="bpfman/bpfman-agent" \
       com.redhat.component="bpfman-agent" \
