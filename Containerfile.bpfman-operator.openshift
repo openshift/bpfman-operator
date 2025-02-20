@@ -34,6 +34,7 @@ COPY --from=bpfman-operator-build /usr/src/bpfman-operator/config/bpfman-deploym
 COPY --from=bpfman-operator-build /usr/src/bpfman-operator/config/bpfman-deployment/csidriverinfo.yaml ./config/bpfman-deployment/csidriverinfo.yaml
 COPY --from=bpfman-operator-build /usr/src/bpfman-operator/config/openshift/restricted-scc.yaml ./config/openshift/restricted-scc.yaml
 COPY --from=bpfman-operator-build /usr/src/bpfman-operator/bpfman-operator .
+COPY LICENSE /licenses/
 
 LABEL name="bpfman/bpfman-operator" \
       com.redhat.component="bpfman-operator" \
