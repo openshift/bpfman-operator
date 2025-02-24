@@ -10,7 +10,7 @@ require (
 	github.com/go-logr/logr v1.4.2
 	github.com/google/go-cmp v0.6.0
 	github.com/kong/kubernetes-testing-framework v0.47.2
-	github.com/openshift/api v0.0.0-20240605201059-cefcda60d938
+	github.com/openshift/api v0.0.0-20250220103441-744790f2cff7
 	github.com/stretchr/testify v1.10.0
 	go.uber.org/zap v1.27.0
 	google.golang.org/grpc v1.70.0
