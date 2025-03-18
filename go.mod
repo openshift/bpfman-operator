@@ -6,7 +6,7 @@ toolchain go1.24.1
 
 require (
 	github.com/bpfman/bpfman v0.5.6
-	github.com/containers/image/v5 v5.34.1
+	github.com/containers/image/v5 v5.34.2
 	github.com/go-logr/logr v1.4.2
 	github.com/google/go-cmp v0.7.0
 	github.com/kong/kubernetes-testing-framework v0.47.2
@@ -24,7 +24,7 @@ require (
 )
 
 require (
-	github.com/containers/storage v1.57.1 // indirect
+	github.com/containers/storage v1.57.2 // indirect
 	github.com/fxamacker/cbor/v2 v2.7.0 // indirect
 	github.com/google/btree v1.1.3 // indirect
 	github.com/google/gnostic-models v0.6.8 // indirect
