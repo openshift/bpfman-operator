@@ -45,7 +45,7 @@ RUN git clone --depth 1 --branch $CRI_REPO_TAG $CRI_REPO_URL .
 RUN GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} VERSION=$CRI_REPO_TAG make
 RUN cp ./build/bin/${TARGETOS}/${TARGETARCH}/crictl .
 
-FROM --platform=$TARGETPLATFORM registry.access.redhat.com/ubi9/ubi-minimal:9.5-1741850109
+FROM --platform=$TARGETPLATFORM registry.access.redhat.com/ubi9/ubi-minimal:9.5-1742914212
 
 ARG TARGETARCH
 ARG TARGETPLATFORM
