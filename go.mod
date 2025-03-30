@@ -6,7 +6,7 @@ toolchain go1.24.1
 
 require (
 	github.com/bpfman/bpfman v0.5.6
-	github.com/containers/image/v5 v5.34.2
+	github.com/containers/image/v5 v5.34.3
 	github.com/go-logr/logr v1.4.2
 	github.com/google/go-cmp v0.7.0
 	github.com/kong/kubernetes-testing-framework v0.47.2
