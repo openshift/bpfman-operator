@@ -48,7 +48,7 @@ import (
 // +kubebuilder:rbac:groups=bpfman.io,resources=configmaps/finalizers,verbs=update
 
 type BpfmanConfigReconciler struct {
-	ClusterProgramReconciler
+	ClusterApplicationReconciler
 	BpfmanStandardDeployment string
 	CsiDriverDeployment      string
 	RestrictedSCC            string
@@ -86,9 +86,8 @@ func (r *BpfmanConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request
 				r.Logger.Error(err, "failed adding bpfman-operator finalizer to bpfman config")
 				return ctrl.Result{Requeue: true, RequeueAfter: retryDurationOperator}, nil
 			}
-		} else {
-			return r.ReconcileBpfmanConfig(ctx, req, bpfmanConfig)
 		}
+		return r.ReconcileBpfmanConfig(ctx, req, bpfmanConfig)
 	}
 
 	return ctrl.Result{}, nil
@@ -309,6 +308,7 @@ func LoadAndConfigureBpfmanDs(config *corev1.ConfigMap, path string) *appsv1.Dae
 	bpfmanAgentLogLevel := config.Data["bpfman.agent.log.level"]
 	bpfmanHealthProbeAddr := config.Data["bpfman.agent.healthprobe.addr"]
 	bpfmanMetricAddr := config.Data["bpfman.agent.metric.addr"]
+	bpfmanConfigs := config.Data["bpfman.toml"]
 
 	// Annotate the log level on the ds so we get automatic restarts on changes.
 	if staticBpfmanDeployment.Spec.Template.ObjectMeta.Annotations == nil {
@@ -319,6 +319,7 @@ func LoadAndConfigureBpfmanDs(config *corev1.ConfigMap, path string) *appsv1.Dae
 	staticBpfmanDeployment.Spec.Template.ObjectMeta.Annotations["bpfman.io.bpfman.agent.loglevel"] = bpfmanAgentLogLevel
 	staticBpfmanDeployment.Spec.Template.ObjectMeta.Annotations["bpfman.io.bpfman.agent.healthprobeaddr"] = bpfmanHealthProbeAddr
 	staticBpfmanDeployment.Spec.Template.ObjectMeta.Annotations["bpfman.io.bpfman.agent.metricaddr"] = bpfmanMetricAddr
+	staticBpfmanDeployment.Spec.Template.ObjectMeta.Annotations["bpfman.io.bpfman.toml"] = bpfmanConfigs
 	staticBpfmanDeployment.Name = internal.BpfmanDsName
 	staticBpfmanDeployment.Namespace = config.Namespace
 	staticBpfmanDeployment.Spec.Template.Spec.AutomountServiceAccountToken = ptr.To(true)
