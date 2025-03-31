@@ -37,12 +37,12 @@ RUN echo "TARGETOS=${TARGETOS}  TARGETARCH=${TARGETARCH}  BUILDPLATFORM=${BUILDP
 
 WORKDIR /usr/src/cri-tools
 ARG CRI_REPO_URL=https://github.com/kubernetes-sigs/cri-tools
-ARG CRI_REPO_BRANCH=master
+ARG CRI_REPO_TAG=v1.32.0
 
-RUN git clone --depth 1 --branch $CRI_REPO_BRANCH $CRI_REPO_URL .
+RUN git clone --depth 1 --branch $CRI_REPO_TAG $CRI_REPO_URL .
 
 # Build
-RUN GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} VERSION="latest" make
+RUN GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} VERSION=$CRI_REPO_TAG make
 RUN cp ./build/bin/${TARGETOS}/${TARGETARCH}/crictl .
 
 # Use the fedora minimal image to reduce the size of the final image but still
