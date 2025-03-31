@@ -4,55 +4,77 @@ metadata:
   labels:
     app.kubernetes.io/name: bpfapplication
   name: bpfapplication-sample
+  namespace: acme
 spec:
   # Select all nodes
-  nodeselector: {}
-  bytecode:
+  nodeSelector: {}
+  byteCode:
     image:
-      url: quay.io/bpfman-bytecode/go-app-counter:latest
+      url: quay.io/bpfman-bytecode/app-test:latest
+  globalData:
+    GLOBAL_u8:
+      - 0x01
+    GLOBAL_u32:
+      - 0x0D
+      - 0x0C
+      - 0x0B
+      - 0x0A
   programs:
-    - type: Kprobe
-      kprobe:
-        bpffunctionname: kprobe_counter
-        func_name: try_to_wake_up
-        offset: 0
-        retprobe: false
-    - type: Tracepoint
-      tracepoint:
-        bpffunctionname: tracepoint_kill_recorder
-        names:
-          - syscalls/sys_enter_kill
-    - type: TC
+    - name: tc_pass_test
+      type: TC
       tc:
-        bpffunctionname: stats
-        interfaceselector:
-          primarynodeinterface: true
-        priority: 55
-        direction: ingress
-    - type: TCX
+        links:
+          - interfaceSelector:
+              interfaces:
+                - eth0
+            priority: 55
+            direction: Ingress
+            networkNamespaces:
+              pods:
+                matchLabels:
+                  app: nginx
+    - name: tcx_next_test
+      type: TCX
       tcx:
-        bpffunctionname: tcx_stats
-        interfaceselector:
-          primarynodeinterface: true
-        priority: 500
-        direction: ingress
-    - type: Uprobe
+        links:
+          - interfaceSelector:
+              interfaces:
+                - eth0
+            priority: 100
+            direction: Egress
+            networkNamespaces:
+              pods:
+                matchLabels:
+                  app: nginx
+    - name: uprobe_test
+      type: UProbe
       uprobe:
-        bpffunctionname: uprobe_counter
-        func_name: malloc
-        target: libc
-        retprobe: false
-        containers:
-          namespace: bpfman
-          pods:
-            matchLabels:
-              name: bpfman-daemon
-          containernames:
-            - bpfman
-            - bpfman-agent
-    - type: XDP
+        links:
+          - function: malloc
+            target: libc
+            containers:
+              pods:
+                matchLabels:
+                  app: nginx
+    - name: uretprobe_test
+      type: URetProbe
+      uretprobe:
+        links:
+          - function: malloc
+            target: libc
+            containers:
+              pods:
+                matchLabels:
+                  app: nginx
+    - name: xdp_pass_test
+      type: XDP
       xdp:
-        bpffunctionname: xdp_stats
-        interfaceselector:
-          primarynodeinterface: true
-        priority: 55
+        links:
+          - interfaceSelector:
+              interfaces:
+                - eth0
+            priority: 100
+            networkNamespaces:
+              pods:
+                matchLabels:
+                  app: nginx
