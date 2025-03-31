@@ -3,7 +3,7 @@ set -eu
 
 #!/usr/bin/env bash
 
-export BPFMAN_AGENT_IMAGE_PULLSPEC="registry.redhat.io/bpfman/bpfman-agent@sha256:2c97b5cd05126213d7d24167374b1a6e613c4441736383a25872381b521a0c42"
+export BPFMAN_AGENT_IMAGE_PULLSPEC="registry.redhat.io/bpfman/bpfman-agent@sha256:bfd243bfaede2411320083ec1426c4b95abafb59300632e5f414f81eae49c7f6"
 
 export BPFMAN_IMAGE_PULLSPEC="registry.redhat.io/bpfman/bpfman@sha256:9a8ce55e4eab640782417f712b1b37d0253acab33636e5d8f557008ba2910f5c"
 
