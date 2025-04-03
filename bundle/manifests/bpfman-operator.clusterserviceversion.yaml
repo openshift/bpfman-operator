@@ -844,7 +844,7 @@ metadata:
     capabilities: Basic Install
     categories: OpenShift Optional
     containerImage: quay.io/bpfman/bpfman-operator:latest
-    createdAt: "2025-03-26T18:33:33Z"
+    createdAt: "2025-04-03T21:06:19Z"
     description: The bpfman Operator is designed to manage eBPF programs for applications.
     features.operators.openshift.io/cnf: "false"
     features.operators.openshift.io/cni: "false"
@@ -1415,7 +1415,7 @@ spec:
                 - --upstream=http://127.0.0.1:8174/
                 - --logtostderr=true
                 - --v=0
-                image: gcr.io/kubebuilder/kube-rbac-proxy:v0.13.0
+                image: registry.redhat.io/openshift4/ose-kube-rbac-proxy@sha256:a9e2e62b47f1706d59e43
                 name: kube-rbac-proxy
                 ports:
                 - containerPort: 8443
