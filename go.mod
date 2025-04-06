@@ -15,7 +15,6 @@ require (
 	github.com/vishvananda/netns v0.0.4
 	go.uber.org/zap v1.27.0
 	google.golang.org/grpc v1.71.0
-	google.golang.org/protobuf v1.36.6
 	k8s.io/api v0.32.3
 	k8s.io/apimachinery v0.32.3
 	k8s.io/client-go v0.32.3
@@ -34,6 +33,7 @@ require (
 	github.com/vishvananda/netlink v1.1.0 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250324211829-b45e905df463 // indirect
+	google.golang.org/protobuf v1.36.6 // indirect
 	gopkg.in/evanphx/json-patch.v4 v4.12.0 // indirect
 	k8s.io/gengo/v2 v2.0.0-20240911193312-2b36238f13e9 // indirect
 	sigs.k8s.io/gateway-api v1.1.0 // indirect
@@ -76,7 +76,7 @@ require (
 	golang.org/x/mod v0.22.0 // indirect
 	golang.org/x/net v0.34.0 // indirect
 	golang.org/x/oauth2 v0.25.0 // indirect
-	golang.org/x/sync v0.10.0 // indirect
+	golang.org/x/sync v0.13.0 // indirect
 	golang.org/x/sys v0.29.0 // indirect
 	golang.org/x/term v0.28.0 // indirect
 	golang.org/x/text v0.21.0 // indirect
