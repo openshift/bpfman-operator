@@ -5,7 +5,7 @@ go 1.23.0
 toolchain go1.24.1
 
 require (
-	github.com/bpfman/bpfman v0.5.7-0.20250305151919-a74c631c3643
+	github.com/bpfman/bpfman 0bab1d100f78
 	github.com/containers/image/v5 v5.34.2
 	github.com/go-logr/logr v1.4.2
 	github.com/kong/kubernetes-testing-framework v0.47.2
