@@ -10,7 +10,7 @@ require (
 	github.com/go-logr/logr v1.4.2
 	github.com/kong/kubernetes-testing-framework v0.47.2
 	github.com/netobserv/netobserv-ebpf-agent v0.3.3
-	github.com/openshift/api v0.0.0-20240605201059-cefcda60d938
+	github.com/openshift/api 7152b1b11175
 	github.com/stretchr/testify v1.10.0
 	github.com/vishvananda/netns v0.0.4
 	go.uber.org/zap v1.27.0
