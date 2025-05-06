@@ -104,6 +104,9 @@ spec:
             - mountPath: /host/netns
               name: host-netns
               mountPropagation: HostToContainer
+            - mountPath: /var/run/netns
+              name: var-run-netns
+              mountPropagation: HostToContainer
             # The bpfman.toml config file
             - name: bpfman-config
               mountPath: /etc/bpfman/bpfman.toml
@@ -113,7 +116,7 @@ spec:
           command: [/bpfman-agent]
           args:
             - --health-probe-bind-address=:8175
-            - --metrics-bind-address=127.0.0.1:8174
+            - --metrics-bind-address=:8443
             - --profiling-bind-address=:6060
           image: quay.io/bpfman/bpfman-agent:latest
           securityContext:
@@ -144,6 +147,12 @@ spec:
               name: host-dockerd
             - mountPath: /etc/crictl.yaml
               name: host-crictl-config
+            - mountPath: /host/proc
+              name: host-proc
+              mountPropagation: HostToContainer
+            - mountPath: /var/run/netns
+              name: var-run-netns
+              mountPropagation: HostToContainer
         - name: node-driver-registrar
           image: quay.io/bpfman/csi-node-driver-registrar:v2.13.0
           imagePullPolicy: IfNotPresent
@@ -218,6 +227,9 @@ spec:
         - hostPath:
             path: /run/netns
           name: host-netns
+        - hostPath:
+            path: /var/run/netns
+          name: var-run-netns
         - hostPath:
             path: /run/containerd/containerd.sock
           name: host-containerd

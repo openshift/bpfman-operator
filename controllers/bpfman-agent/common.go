@@ -19,12 +19,13 @@ package bpfmanagent
 import (
 	"context"
 	"fmt"
+	"os"
 	"regexp"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
-	"github.com/vishvananda/netns"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -56,7 +57,9 @@ import (
 // +kubebuilder:rbac:groups=core,resources=secrets,verbs=get
 
 const (
-	retryDurationAgent = 1 * time.Second
+	retryDurationAgent  = 1 * time.Second
+	updateRetryInterval = 100 * time.Millisecond
+	updateTimeout       = 2 * time.Minute
 )
 
 type ReconcilerCommon struct {
@@ -71,6 +74,7 @@ type ReconcilerCommon struct {
 	Containers   ContainerGetter
 	ourNode      *v1.Node
 	Interfaces   *sync.Map
+	NetnsCache   map[string]uint64
 }
 
 // ApplicationReconciler is an interface that defines the methods needed to
@@ -89,10 +93,10 @@ type ApplicationReconciler interface {
 	getAppStateName() string
 	getNode() *v1.Node
 	getNodeSelector() *metav1.LabelSelector
-	GetStatus() *bpfmaniov1alpha1.BpfAppStatus
+	getAppStateConditions() *[]metav1.Condition
+	setAppStateConditions(condition metav1.Condition)
 	isBeingDeleted() bool
-	updateBpfAppStatus(ctx context.Context, condition metav1.Condition) error
-	updateLoadStatus(updateStatus bpfmaniov1alpha1.AppLoadStatus)
+	setAppLoadStatus(updateStatus bpfmaniov1alpha1.AppLoadStatus)
 	validateProgramList() error
 	load(ctx context.Context) error
 	isLoaded(ctx context.Context) bool
@@ -133,26 +137,26 @@ func (r *ReconcilerCommon) reconcileLoad(ctx context.Context, rec ApplicationRec
 	if !isNodeSelected {
 		// The program should not be loaded.  Unload it if necessary
 		rec.unload(ctx)
-		rec.updateLoadStatus(bpfmaniov1alpha1.NotSelected)
+		rec.setAppLoadStatus(bpfmaniov1alpha1.NotSelected)
 	} else if rec.isBeingDeleted() {
 		// The program should not be loaded.  Unload it if necessary
 		rec.unload(ctx)
-		rec.updateLoadStatus(bpfmaniov1alpha1.AppUnLoadSuccess)
+		rec.setAppLoadStatus(bpfmaniov1alpha1.AppUnLoadSuccess)
 	} else {
 		err := rec.validateProgramList()
 		if err != nil {
-			rec.updateLoadStatus(bpfmaniov1alpha1.ProgListChangedError)
+			rec.setAppLoadStatus(bpfmaniov1alpha1.ProgListChangedError)
 			return err
 		}
 		if rec.isLoaded(ctx) {
-			rec.updateLoadStatus(bpfmaniov1alpha1.AppLoadSuccess)
+			rec.setAppLoadStatus(bpfmaniov1alpha1.AppLoadSuccess)
 		} else {
 			err := rec.load(ctx)
 			if err != nil {
-				rec.updateLoadStatus(bpfmaniov1alpha1.AppLoadError)
+				rec.setAppLoadStatus(bpfmaniov1alpha1.AppLoadError)
 				return fmt.Errorf("failed to load program: %v", err)
 			} else {
-				rec.updateLoadStatus(bpfmaniov1alpha1.AppLoadSuccess)
+				rec.setAppLoadStatus(bpfmaniov1alpha1.AppLoadSuccess)
 			}
 		}
 	}
@@ -160,47 +164,41 @@ func (r *ReconcilerCommon) reconcileLoad(ctx context.Context, rec ApplicationRec
 	return nil
 }
 
-// updateStatus updates the status of a BpfApplicationState object if needed,
-// returning true if the status was changed, and false if the status was not
-// changed.
-func (r *ReconcilerCommon) updateStatus(
-	ctx context.Context,
+// updateBpfAppStateCondition updates the overall status of a BpfApplicationState object
+// maintained in the Conditions field if needed, returning true if the status
+// was changed, and false if the status was not changed.
+func (r *ReconcilerCommon) updateBpfAppStateCondition(
 	rec ApplicationReconciler,
 	condition bpfmaniov1alpha1.BpfApplicationStateConditionType,
-) (bool, error) {
-	status := rec.GetStatus()
-	r.Logger.V(1).Info("updateStatus()", "existing conds", status.Conditions, "new cond", condition)
+) bool {
+	conditions := rec.getAppStateConditions()
+	r.Logger.V(1).Info("updateStatus()", "existing conds", conditions, "new cond", condition)
 
-	if status.Conditions != nil {
-		numConditions := len(status.Conditions)
+	if conditions != nil {
+		numConditions := len(*conditions)
 
 		if numConditions == 1 {
-			if status.Conditions[0].Type == string(condition) {
+			if (*conditions)[0].Type == string(condition) {
 				// No change, so just return false -- not updated
-				return false, nil
+				return false
 			} else {
 				// We're changing the condition, so delete this one.  The
 				// new condition will be added below.
-				status.Conditions = nil
+				*conditions = nil
 			}
 		} else if numConditions > 1 {
 			// We should only ever have one condition, so we shouldn't hit this
 			// case.  However, if we do, log a message, delete the existing
 			// conditions, and add the new one below.
 			r.Logger.Info("more than one condition detected", "numConditions", numConditions)
-			status.Conditions = nil
+			*conditions = nil
 		}
 		// if numConditions == 0, just add the new condition below.
 	}
 
-	r.Logger.Info("Calling KubeAPI to update BpfAppState condition", "Name", rec.getAppStateName, "condition", condition.Condition().Type)
-	err := rec.updateBpfAppStatus(ctx, condition.Condition())
-	if err != nil {
-		r.Logger.Info("failed to set BpfApplication object status", "reason", err)
-	}
-
-	r.Logger.V(1).Info("condition updated", "new condition", condition, "existing conds", status.Conditions)
-	return true, err
+	rec.setAppStateConditions(condition.Condition())
+	r.Logger.V(1).Info("condition updated", "new condition", condition, "existing conds", conditions)
+	return true
 }
 
 // reconcileProgram is a common function for reconciling programs contained in a
@@ -210,6 +208,7 @@ func (r *ReconcilerCommon) updateStatus(
 func (r *ReconcilerCommon) reconcileProgram(ctx context.Context, program ProgramReconciler, isBeingDeleted bool) error {
 	err := program.updateLinks(ctx, isBeingDeleted)
 	if err != nil {
+		r.Logger.V(1).Info("updateLinks() failed", "error", err)
 		program.setProgramLinkStatus(bpfmaniov1alpha1.UpdateAttachInfoError)
 		return err
 	}
@@ -284,25 +283,40 @@ func interfaceInAllowedList(intf string, allowedRegexpes []*regexp.Regexp, allow
 	return false
 }
 
-func getInterfaces(interfaceSelector *bpfmaniov1alpha1.InterfaceSelector, ourNode *v1.Node, discoveredInterfaces *sync.Map) ([]string, error) {
-	var interfaces []string
+type discoveredInterface struct {
+	interfaceName string
+	netNSPath     string
+}
 
-	if isInterfacesDiscoveryEnabled(interfaceSelector) {
-		allowedRegexpes, allowedMatches := setupAllowedInterfacesLists(interfaceSelector)
-		discoveredInterfaces.Range(func(key, value any) bool {
-			if value.(bool) {
-				intf := key.(ifaces.Interface)
-				if !interfaceInExcludeList(interfaceSelector, intf.Name) && interfaceInAllowedList(intf.Name, allowedRegexpes, allowedMatches) {
-					interfaces = append(interfaces, intf.Name)
+func getDiscoveredInterfaces(interfaceSelector *bpfmaniov1alpha1.InterfaceSelector, discoveredInterfacesMap *sync.Map) []discoveredInterface {
+	var discoveredInterfaces []discoveredInterface
+	var netNSPath string
+	allowedRegexpes, allowedMatches := setupAllowedInterfacesLists(interfaceSelector)
+	seenInterface := make(map[discoveredInterface]bool)
+	discoveredInterfacesMap.Range(func(key, value any) bool {
+		if value.(bool) {
+			intf := key.(ifaces.Interface)
+			if !interfaceInExcludeList(interfaceSelector, intf.Name) && interfaceInAllowedList(intf.Name, allowedRegexpes, allowedMatches) {
+				netNSPath = ""
+				if intf.NSName != "" {
+					netNSPath = internal.NetNsPath + "/" + intf.NSName
+				}
+				if _, ok := seenInterface[discoveredInterface{intf.Name, netNSPath}]; !ok {
+					discoveredInterfaces = append(discoveredInterfaces, discoveredInterface{
+						interfaceName: intf.Name,
+						netNSPath:     netNSPath,
+					})
+					seenInterface[discoveredInterface{intf.Name, netNSPath}] = true
 				}
 			}
-			return true
-		})
-		if len(interfaces) > 0 {
-			return interfaces, nil
 		}
-		return nil, fmt.Errorf("interfaces discovery is enabled but no interface discovered")
-	}
+		return true
+	})
+	return discoveredInterfaces
+}
+
+func getInterfaces(interfaceSelector *bpfmaniov1alpha1.InterfaceSelector, ourNode *v1.Node) ([]string, error) {
+	var interfaces []string
 
 	if len(interfaceSelector.Interfaces) > 0 {
 		return interfaceSelector.Interfaces, nil
@@ -588,26 +602,46 @@ func netnsPathFromPID(pid int32) string {
 	return fmt.Sprintf("/host/proc/%d/ns/net", pid)
 }
 
-func getInterfaceNetNsList(interfaceSelector *bpfmaniov1alpha1.InterfaceSelector, ifName string, discoveredInterfaces *sync.Map) map[string][]string {
-	netnsList := make(map[string][]string)
-	if isInterfacesDiscoveryEnabled(interfaceSelector) {
-		discoveredInterfaces.Range(func(key, value any) bool {
-			if value.(bool) {
-				intf := key.(ifaces.Interface)
-				if intf.Name == ifName && intf.NetNS != netns.None() {
-					netnsList[ifName] = append(netnsList[ifName], internal.NetNsPath+intf.NetNS.String())
-				}
-			}
-			return true
-		})
-	}
-	return netnsList
-}
-
 func isInterfacesDiscoveryEnabled(interfaceSelector *bpfmaniov1alpha1.InterfaceSelector) bool {
 	if interfaceSelector.InterfacesDiscoveryConfig != nil && interfaceSelector.InterfacesDiscoveryConfig.InterfaceAutoDiscovery != nil &&
 		*interfaceSelector.InterfacesDiscoveryConfig.InterfaceAutoDiscovery {
 		return true
 	}
 	return false
+}
+
+// getNetnsId returns the network namespace ID from the given path. If the path
+// is empty, it defaults to "/host/proc/1/ns/net".  If the file is a hard link,
+// it returns the inode number of the file.  If the file is a soft link, it
+// returns the inode of the file linked. If the path is not valid or the
+// conversion to Stat_t fails, it returns nil.
+func (r *ReconcilerCommon) getNetnsId(path string) *uint64 {
+	if path == "" {
+		r.Logger.V(1).Info("Enter getNetnsId: Path is empty.  Using /host/proc/1/ns/net")
+		path = "/host/proc/1/ns/net"
+	} else {
+		r.Logger.V(1).Info("Enter getNetnsId", "Path", path)
+	}
+
+	// If path is in the cache, return the cached value
+	if id, ok := r.NetnsCache[path]; ok {
+		r.Logger.V(1).Info("Exit getNetnsId: Found in cache", "Path", path, "inode", id)
+		return &id
+	}
+
+	info, err := os.Stat(path)
+	if err != nil {
+		r.Logger.V(1).Info("Exit getNetnsId: Failed to stat file", "path", path, "error", err)
+		return nil
+	}
+
+	stat, ok := info.Sys().(*syscall.Stat_t)
+	if !ok {
+		r.Logger.V(1).Info("Exit getNetnsId: Failed to convert to Stat_t", "path", path)
+		return nil
+	}
+
+	r.NetnsCache[path] = stat.Ino
+	r.Logger.V(1).Info("Exit getNetnsId", "Path", path, "inode", stat.Ino)
+	return &stat.Ino
 }
