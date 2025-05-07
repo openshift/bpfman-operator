@@ -133,12 +133,17 @@ func (r *ClTcxProgramReconciler) updateLinks(ctx context.Context, isBeingDeleted
 
 	if r.currentProgram.TCX != nil && r.currentProgram.TCX.Links != nil {
 		for _, attachInfo := range r.currentProgram.TCX.Links {
-			expectedLinks, error := r.getExpectedLinks(ctx, attachInfo)
-			if error != nil {
-				return fmt.Errorf("failed to get node links: %v", error)
+			expectedLinks, err := r.getExpectedLinks(ctx, attachInfo)
+			if err != nil {
+				r.Logger.V(1).Info("updateLinks() failed", "error", err)
+				return fmt.Errorf("failed to get node links: %v", err)
 			}
 			for _, link := range expectedLinks {
-				index := r.findLink(link)
+				index, err := r.findLink(link)
+				if err != nil {
+					r.Logger.Info("Error", "Invalid link", r.printAttachInfo(link), "Error", err)
+					continue
+				}
 				if index != nil {
 					// Link already exists, so set ShouldAttach to true.
 					r.currentProgramState.TCX.Links[*index].AttachInfoStateCommon.ShouldAttach = true
@@ -159,17 +164,35 @@ func (r *ClTcxProgramReconciler) updateLinks(ctx context.Context, isBeingDeleted
 	return nil
 }
 
-func (r *ClTcxProgramReconciler) findLink(attachInfoState bpfmaniov1alpha1.ClTcxAttachInfoState) *int {
+func (r *ClTcxProgramReconciler) printAttachInfo(attachInfoState bpfmaniov1alpha1.ClTcxAttachInfoState) string {
+	var netnsPath string
+	if attachInfoState.NetnsPath == "" {
+		netnsPath = "host"
+	} else {
+		netnsPath = attachInfoState.NetnsPath
+	}
+
+	return fmt.Sprintf("interfaceName: %s, netnsPath: %s, direction: %s, priority: %d",
+		attachInfoState.InterfaceName, netnsPath, attachInfoState.Direction, attachInfoState.Priority)
+}
+
+func (r *ClTcxProgramReconciler) findLink(attachInfoState bpfmaniov1alpha1.ClTcxAttachInfoState) (*int, error) {
+	newNetnsId := r.getNetnsId(attachInfoState.NetnsPath)
+	if newNetnsId == nil {
+		return nil, fmt.Errorf("failed to get netnsId for path %s", attachInfoState.NetnsPath)
+	}
+	r.Logger.V(1).Info("findlink", "New Path", attachInfoState.NetnsPath, "NetnsId", newNetnsId)
 	for i, a := range r.currentProgramState.TCX.Links {
 		// attachInfoState is the same as a if the the following fields are the
-		// same: InterfaceName, NetnsPath, Priority, and Direction.
-		if a.InterfaceName == attachInfoState.InterfaceName && a.Priority == attachInfoState.Priority &&
+		// same: InterfaceName, Direction, Priority, and network namespace.
+		if a.InterfaceName == attachInfoState.InterfaceName &&
 			a.Direction == attachInfoState.Direction &&
-			reflect.DeepEqual(a.NetnsPath, attachInfoState.NetnsPath) {
-			return &i
+			a.Priority == attachInfoState.Priority &&
+			reflect.DeepEqual(r.getNetnsId(a.NetnsPath), newNetnsId) {
+			return &i, nil
 		}
 	}
-	return nil
+	return nil, nil
 }
 
 // processLinks calls reconcileBpfLink() for each link. It
@@ -234,17 +257,47 @@ func (r *ClTcxProgramReconciler) removeLinks(links []bpfmaniov1alpha1.ClTcxAttac
 
 // getExpectedLinks expands *AttachInfo into a list of specific attach
 // points.
-func (r *ClTcxProgramReconciler) getExpectedLinks(ctx context.Context, attachInfo bpfmaniov1alpha1.ClTcxAttachInfo,
-) ([]bpfmaniov1alpha1.ClTcxAttachInfoState, error) {
-	interfaces, err := getInterfaces(&attachInfo.InterfaceSelector, r.ourNode, r.Interfaces)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get interfaces for TcxProgram: %v", err)
+func (r *ClTcxProgramReconciler) getExpectedLinks(ctx context.Context, attachInfo bpfmaniov1alpha1.ClTcxAttachInfo) ([]bpfmaniov1alpha1.ClTcxAttachInfoState, error) {
+	nodeLinks := []bpfmaniov1alpha1.ClTcxAttachInfoState{}
+	// Helper function to create a ClTcxAttachInfoState entry
+	createLinkEntry := func(interfaceName, netnsPath string) bpfmaniov1alpha1.ClTcxAttachInfoState {
+		return bpfmaniov1alpha1.ClTcxAttachInfoState{
+			AttachInfoStateCommon: bpfmaniov1alpha1.AttachInfoStateCommon{
+				ShouldAttach: true,
+				UUID:         uuid.New().String(),
+				LinkId:       nil,
+				LinkStatus:   bpfmaniov1alpha1.ApAttachNotAttached,
+			},
+			InterfaceName: interfaceName,
+			NetnsPath:     netnsPath,
+			Priority:      attachInfo.Priority,
+			Direction:     attachInfo.Direction,
+		}
 	}
 
-	nodeLinks := []bpfmaniov1alpha1.ClTcxAttachInfoState{}
+	// Handle interface discovery
+	if isInterfacesDiscoveryEnabled(&attachInfo.InterfaceSelector) {
+		discoveredInterfaces := getDiscoveredInterfaces(&attachInfo.InterfaceSelector, r.Interfaces)
 
+		r.Logger.Info("getExpectedLinks", "num discoveredInterfaces", len(discoveredInterfaces))
+		for _, intf := range discoveredInterfaces {
+			nodeLinks = append(nodeLinks, createLinkEntry(intf.interfaceName, intf.netNSPath))
+		}
+		r.Logger.V(1).Info("getExpectedLinks-discovery", "Links created", len(nodeLinks))
+		return nodeLinks, nil
+	}
+
+	// Fetch interfaces if discovery is disabled
+	interfaces, err := getInterfaces(&attachInfo.InterfaceSelector, r.ourNode)
+	if err != nil {
+		r.Logger.V(1).Info("getExpectedLinks failed to get interfaces", "error", err)
+		return nil, fmt.Errorf("failed to get interfaces for XdpProgram: %w", err)
+	}
+
+	r.Logger.Info("getExpectedLinks", "Number of interfaces", len(interfaces))
+
+	// Handle network namespaces if provided
 	if attachInfo.NetworkNamespaces != nil {
-		// If the pod selector is set, we use the pod selector.
 		containerInfo, err := r.Containers.GetContainers(
 			ctx,
 			attachInfo.NetworkNamespaces.Namespace,
@@ -253,71 +306,32 @@ func (r *ClTcxProgramReconciler) getExpectedLinks(ctx context.Context, attachInf
 			r.Logger,
 		)
 		if err != nil {
-			return nil, fmt.Errorf("failed to get container pids: %v", err)
+			r.Logger.V(1).Info("getExpectedLinks failed to get container pids", "error", err)
+			return nil, fmt.Errorf("failed to get container pids: %w", err)
 		}
 
-		if containerInfo != nil {
-			// Just use one container per pod to get the pod's network
-			// namespace.
-			containerInfo = GetOneContainerPerPod(containerInfo)
-			for _, container := range *containerInfo {
-				netnsPath := netnsPathFromPID(container.pid)
-				for _, iface := range interfaces {
-					link := bpfmaniov1alpha1.ClTcxAttachInfoState{
-						AttachInfoStateCommon: bpfmaniov1alpha1.AttachInfoStateCommon{
-							ShouldAttach: true,
-							UUID:         uuid.New().String(),
-							LinkId:       nil,
-							LinkStatus:   bpfmaniov1alpha1.ApAttachNotAttached,
-						},
-						InterfaceName: iface,
-						NetnsPath:     netnsPath,
-						Priority:      attachInfo.Priority,
-						Direction:     attachInfo.Direction,
-					}
-					nodeLinks = append(nodeLinks, link)
-				}
-			}
-		} else {
-			// This is an error -- either namespacePath or pods must be set.
-			r.Logger.Error(fmt.Errorf("neither namespacePath nor pods is set"), "internal error")
+		if containerInfo == nil {
+			r.Logger.Info("NetworkNamespaces is configured but no matching container found")
+			return nodeLinks, nil
 		}
-	} else {
-		for _, iface := range interfaces {
-			netnsList := getInterfaceNetNsList(&attachInfo.InterfaceSelector, iface, r.Interfaces)
-			if len(netnsList) == 0 {
-				link := bpfmaniov1alpha1.ClTcxAttachInfoState{
-					AttachInfoStateCommon: bpfmaniov1alpha1.AttachInfoStateCommon{
-						ShouldAttach: true,
-						UUID:         uuid.New().String(),
-						LinkId:       nil,
-						LinkStatus:   bpfmaniov1alpha1.ApAttachNotAttached,
-					},
-					InterfaceName: iface,
-					Priority:      attachInfo.Priority,
-					Direction:     attachInfo.Direction,
-				}
-				nodeLinks = append(nodeLinks, link)
-			} else {
-				for _, netns := range netnsList[iface] {
-					link := bpfmaniov1alpha1.ClTcxAttachInfoState{
-						AttachInfoStateCommon: bpfmaniov1alpha1.AttachInfoStateCommon{
-							ShouldAttach: true,
-							UUID:         uuid.New().String(),
-							LinkId:       nil,
-							LinkStatus:   bpfmaniov1alpha1.ApAttachNotAttached,
-						},
-						InterfaceName: iface,
-						Priority:      attachInfo.Priority,
-						Direction:     attachInfo.Direction,
-						NetnsPath:     netns,
-					}
-					nodeLinks = append(nodeLinks, link)
-				}
+
+		containerInfo = GetOneContainerPerPod(containerInfo)
+		for _, container := range *containerInfo {
+			netnsPath := netnsPathFromPID(container.pid)
+			for _, iface := range interfaces {
+				nodeLinks = append(nodeLinks, createLinkEntry(iface, netnsPath))
 			}
 		}
+		r.Logger.V(1).Info("getExpectedLinks", "Links created", len(nodeLinks))
+		return nodeLinks, nil
 	}
 
+	// Fallback: Assign interfaces without a namespace
+	for _, iface := range interfaces {
+		nodeLinks = append(nodeLinks, createLinkEntry(iface, ""))
+	}
+
+	r.Logger.V(1).Info("getExpectedLinks", "Links created", len(nodeLinks))
 	return nodeLinks, nil
 }
 

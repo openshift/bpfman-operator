@@ -138,7 +138,11 @@ func (r *NsTcProgramReconciler) updateLinks(ctx context.Context, isBeingDeleted 
 				return fmt.Errorf("failed to get node links: %v", error)
 			}
 			for _, link := range expectedLinks {
-				index := r.findLink(link)
+				index, err := r.findLink(link)
+				if err != nil {
+					r.Logger.Info("Error", "Invalid link", r.printAttachInfo(link), "Error", err)
+					continue
+				}
 				if index != nil {
 					// Link already exists, so set ShouldAttach to true.
 					r.currentProgramState.TC.Links[*index].AttachInfoStateCommon.ShouldAttach = true
@@ -159,18 +163,36 @@ func (r *NsTcProgramReconciler) updateLinks(ctx context.Context, isBeingDeleted 
 	return nil
 }
 
-func (r *NsTcProgramReconciler) findLink(attachInfoState bpfmaniov1alpha1.TcAttachInfoState) *int {
+func (r *NsTcProgramReconciler) printAttachInfo(attachInfoState bpfmaniov1alpha1.TcAttachInfoState) string {
+	var netnsPath string
+	if attachInfoState.NetnsPath == "" {
+		netnsPath = "host"
+	} else {
+		netnsPath = attachInfoState.NetnsPath
+	}
+
+	return fmt.Sprintf("interfaceName: %s, netnsPath: %s, direction: %s, priority: %d",
+		attachInfoState.InterfaceName, netnsPath, attachInfoState.Direction, attachInfoState.Priority)
+}
+
+func (r *NsTcProgramReconciler) findLink(attachInfoState bpfmaniov1alpha1.TcAttachInfoState) (*int, error) {
+	newNetnsId := r.getNetnsId(attachInfoState.NetnsPath)
+	if newNetnsId == nil {
+		return nil, fmt.Errorf("failed to get netnsId for path %s", attachInfoState.NetnsPath)
+	}
+	r.Logger.V(1).Info("findlink", "New Path", attachInfoState.NetnsPath, "NetnsId", newNetnsId)
 	for i, a := range r.currentProgramState.TC.Links {
 		// attachInfoState is the same as a if the the following fields are the
-		// same: InterfaceName, Direction, Priority, NetnsPath, and ProceedOn.
-		if a.InterfaceName == attachInfoState.InterfaceName && a.Direction == attachInfoState.Direction &&
+		// same: InterfaceName, Direction, Priority, ProceedOn, and network namespace.
+		if a.InterfaceName == attachInfoState.InterfaceName &&
+			a.Direction == attachInfoState.Direction &&
 			a.Priority == attachInfoState.Priority &&
-			reflect.DeepEqual(a.NetnsPath, attachInfoState.NetnsPath) &&
-			reflect.DeepEqual(a.ProceedOn, attachInfoState.ProceedOn) {
-			return &i
+			reflect.DeepEqual(a.ProceedOn, attachInfoState.ProceedOn) &&
+			reflect.DeepEqual(r.getNetnsId(a.NetnsPath), newNetnsId) {
+			return &i, nil
 		}
 	}
-	return nil
+	return nil, nil
 }
 
 // processLinks calls reconcileBpfLink() for each link. It
@@ -237,7 +259,7 @@ func (r *NsTcProgramReconciler) removeLinks(links []bpfmaniov1alpha1.TcAttachInf
 // points.
 func (r *NsTcProgramReconciler) getExpectedLinks(ctx context.Context, attachInfo bpfmaniov1alpha1.TcAttachInfo,
 ) ([]bpfmaniov1alpha1.TcAttachInfoState, error) {
-	interfaces, err := getInterfaces(&attachInfo.InterfaceSelector, r.ourNode, r.Interfaces)
+	interfaces, err := getInterfaces(&attachInfo.InterfaceSelector, r.ourNode)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get interfaces for TcProgram: %v", err)
 	}
