@@ -3,7 +3,7 @@ set -eu
 
 #!/usr/bin/env bash
 
-export BPFMAN_OPERATOR_IMAGE_PULLSPEC="registry.redhat.io/bpfman/bpfman-rhel9-operator@sha256:4e520ffa5481a5ea70b8cc340cdfd1dca2d3483f54dde58dfd978fc635154886"
+export BPFMAN_OPERATOR_IMAGE_PULLSPEC="registry.redhat.io/bpfman/bpfman-rhel9-operator@sha256:0d464096732139b44ae03718e18a3b866d2378abbbe322eed6082c7719d29973"
 
 export CSV_FILE=/manifests/bpfman-operator.clusterserviceversion.yaml
 
