@@ -179,8 +179,8 @@ github.com/netobserv/netobserv-ebpf-agent/pkg/ifaces
 # github.com/opencontainers/go-digest v1.0.0
 ## explicit; go 1.13
 github.com/opencontainers/go-digest
-# github.com/openshift/api v0.0.0-20240605201059-cefcda60d938
-## explicit; go 1.22.0
+# github.com/openshift/api v0.0.0-20250502141415-7152b1b11175
+## explicit; go 1.23.0
 github.com/openshift/api/security/v1
 # github.com/pkg/errors v0.9.1
 ## explicit
