@@ -54,21 +54,25 @@ spec:
     description: Execute the build with network isolation
     name: hermetic
     type: string
-  - default: "{\"type\":\"pip\", \"path\":\".\"}"
+  - default: ""
     description: Build dependencies to be prefetched by Cachi2
     name: prefetch-input
     type: string
-  - default: "false"
-    description: Java build
-    name: java
+  - default: "true"
+    description: Enable dev-package-managers in prefetch task
+    name: prefetch-dev-package-managers-enabled
     type: string
   - default: ""
     description: Image tag expiration time, time values could be something like
       1h, 2d, 3w for hours, days, and weeks, respectively.
     name: image-expires-after
-  - default: "true"
+  - default: "false"
     description: Build a source image.
     name: build-source-image
+    type: string
+  - default: "false"
+    description: Add built image into an OCI image index
+    name: build-image-index
     type: string
   - default: []
     description: Array of --build-arg values ("arg=value" strings) for buildah
@@ -78,7 +82,7 @@ spec:
     description: Path to a file with build arguments for buildah, see https://www.mankier.com/1/buildah-build#--build-arg-file
     name: build-args-file
     type: string
-  - default: ["linux/x86_64", "linux/arm64", "linux/ppc64le", "linux/s390x"]
+  - default: ["linux/x86_64"]
     description: List of platforms to build the container images on. The available set of values is determined by the configuration of the multi-platform-controller.
     name: build-platforms
     type: array
@@ -152,6 +156,8 @@ spec:
       value: $(params.output-image).prefetch
     - name: ociArtifactExpiresAfter
       value: $(params.image-expires-after)
+    - name: dev-package-managers
+      value: "true"
     runAfter:
     - clone-repository
     taskRef:
@@ -173,12 +179,12 @@ spec:
       workspace: git-auth
     - name: netrc
       workspace: netrc
-  - name: build-container
-    matrix:
+  - matrix:
       params:
       - name: PLATFORM
         value:
         - $(params.build-platforms)
+    name: build-images
     params:
     - name: IMAGE
       value: $(params.output-image)
@@ -197,7 +203,6 @@ spec:
     - name: BUILD_ARGS
       value:
       - $(params.build-args[*])
-      - "OPM_IMAGE=$(params.opm-image)"
     - name: BUILD_ARGS_FILE
       value: $(params.build-args-file)
     - name: SOURCE_ARTIFACT
@@ -207,7 +212,7 @@ spec:
     - name: IMAGE_APPEND_PLATFORM
       value: "true"
     runAfter:
-    - prefetch-dependencies
+    - clone-repository
     taskRef:
       params:
       - name: name
@@ -231,12 +236,12 @@ spec:
     - name: IMAGE_EXPIRES_AFTER
       value: $(params.image-expires-after)
     - name: ALWAYS_BUILD_INDEX
-      value: "true"
+      value: $(params.build-image-index)
     - name: IMAGES
       value:
-      - $(tasks.build-container.results.IMAGE_REF[*])
+      - $(tasks.build-images.results.IMAGE_REF[*])
     runAfter:
-    - build-container
+    - build-images
     taskRef:
       params:
       - name: name
@@ -282,7 +287,7 @@ spec:
     - name: IMAGE_DIGEST
       value: $(tasks.build-image-index.results.IMAGE_DIGEST)
     runAfter:
-    - build-container
+    - build-image-index
     taskRef:
       params:
       - name: name
@@ -302,36 +307,13 @@ spec:
     - name: IMAGE
       value: $(tasks.build-image-index.results.IMAGE_URL)
     runAfter:
-    - build-container
+    - build-image-index
     taskRef:
       params:
       - name: name
         value: apply-tags
       - name: bundle
         value: quay.io/konflux-ci/tekton-catalog/task-apply-tags:0.1@sha256:3f89ba89cacf8547261b5ce064acce81bfe470c8ace127794d0e90aebc8c347d
-      - name: kind
-        value: task
-      resolver: bundles
-  - name: push-dockerfile
-    params:
-    - name: IMAGE
-      value: $(tasks.build-image-index.results.IMAGE_URL)
-    - name: IMAGE_DIGEST
-      value: $(tasks.build-image-index.results.IMAGE_DIGEST)
-    - name: DOCKERFILE
-      value: $(params.dockerfile)
-    - name: CONTEXT
-      value: $(params.path-context)
-    - name: SOURCE_ARTIFACT
-      value: $(tasks.prefetch-dependencies.results.SOURCE_ARTIFACT)
-    runAfter:
-    - build-image-index
-    taskRef:
-      params:
-      - name: name
-        value: push-dockerfile-oci-ta
-      - name: bundle
-        value: quay.io/konflux-ci/tekton-catalog/task-push-dockerfile-oci-ta:0.1@sha256:278f84550844c1c050a65536799f4b54e7c203e0ac51393aa75379dd974c82e9
       - name: kind
         value: task
       resolver: bundles
