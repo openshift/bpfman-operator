@@ -7,11 +7,10 @@ metadata:
     build.appstudio.redhat.com/pull_request_number: '{{pull_request_number}}'
     build.appstudio.redhat.com/target_branch: '{{target_branch}}'
     pipelinesascode.tekton.dev/max-keep-runs: "3"
-    pipelinesascode.tekton.dev/on-cel-expression: event == "pull_request" && target_branch == "release-4.17" &&
-      (".tekton/ocp-bpfman-operator-catalog-pull-request.yaml".pathChanged() ||
-      "Containerfile.catalog.openshift-4.17".pathChanged() ||
-      "rpms.in.yaml".pathChanged() ||
-      "catalog/***".pathChanged())
+    pipelinesascode.tekton.dev/on-cel-expression: event == "pull_request" && target_branch
+      == "release-4.17" && (".tekton/ocp-bpfman-operator-catalog-pull-request.yaml".pathChanged()
+      || "Containerfile.catalog.openshift-4.17".pathChanged() || "rpms.in.yaml".pathChanged()
+      || "catalog/***".pathChanged())
   creationTimestamp: null
   labels:
     appstudio.openshift.io/application: fbc-4-17
@@ -388,7 +387,8 @@ spec:
       optional: true
     - name: netrc
       optional: true
-  taskRunTemplate: {}
+  taskRunTemplate:
+    serviceAccountName: build-pipeline-ocp-bpfman-operator-catalog
   workspaces:
   - name: workspace
     volumeClaimTemplate:
