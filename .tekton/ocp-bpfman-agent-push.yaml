@@ -2,26 +2,18 @@ apiVersion: tekton.dev/v1
 kind: PipelineRun
 metadata:
   annotations:
+    build.appstudio.openshift.io/build-nudge-files: hack/update_configmap.sh
     build.appstudio.openshift.io/repo: https://github.com/openshift/bpfman-operator?rev={{revision}}
     build.appstudio.redhat.com/commit_sha: '{{revision}}'
     build.appstudio.redhat.com/target_branch: '{{target_branch}}'
-    build.appstudio.openshift.io/build-nudge-files: "hack/update_configmap.sh"
     pipelinesascode.tekton.dev/max-keep-runs: "3"
-    pipelinesascode.tekton.dev/on-cel-expression: event == "push" && target_branch == "main" &&
-     (".tekton/multi-arch-build-pipeline.yaml".pathChanged() ||
-      ".tekton/ocp-bpfman-agent-pull-request.yaml".pathChanged() ||
-      ".tekton/ocp-bpfman-agent-push.yaml".pathChanged() ||
-      "apis/***".pathChanged() ||
-      "controllers/***".pathChanged() ||
-      "cmd/***".pathChanged() ||
-      "Containerfile.bpfman-agent.openshift".pathChanged() ||
-      "go.mod".pathChanged() ||
-      "go.sum".pathChanged() ||
-      "Makefile".pathChanged() ||
-      "pkg/***".pathChanged() ||
-      "internal/***".pathChanged() ||
-      "test/***".pathChanged() ||
-      "vendor/***".pathChanged())
+    pipelinesascode.tekton.dev/on-cel-expression: event == "push" && target_branch
+      == "main" && (".tekton/multi-arch-build-pipeline.yaml".pathChanged() || ".tekton/ocp-bpfman-agent-pull-request.yaml".pathChanged()
+      || ".tekton/ocp-bpfman-agent-push.yaml".pathChanged() || "apis/***".pathChanged()
+      || "controllers/***".pathChanged() || "cmd/***".pathChanged() || "Containerfile.bpfman-agent.openshift".pathChanged()
+      || "go.mod".pathChanged() || "go.sum".pathChanged() || "Makefile".pathChanged()
+      || "pkg/***".pathChanged() || "internal/***".pathChanged() || "test/***".pathChanged()
+      || "vendor/***".pathChanged())
   creationTimestamp: null
   labels:
     appstudio.openshift.io/application: bpfman-operator
@@ -33,8 +25,6 @@ spec:
   params:
   - name: build-source-image
     value: "true"
-  #- name: prefetch-input
-  #  value: '{"type": "gomod", "path": "."}'
   - name: git-url
     value: '{{source_url}}'
   - name: revision
@@ -47,13 +37,14 @@ spec:
     value: .
   - name: build-platforms
     value:
-      - localhost
-      - linux/arm64
-      - linux/ppc64le
-      - linux/s390x
+    - localhost
+    - linux/arm64
+    - linux/ppc64le
+    - linux/s390x
   pipelineRef:
     name: build-pipeline
-  taskRunTemplate: {}
+  taskRunTemplate:
+    serviceAccountName: build-pipeline-ocp-bpfman-agent
   workspaces:
   - name: workspace
     volumeClaimTemplate:
