@@ -51,7 +51,7 @@ echo "Adding bundle image to FBC using image ${BUNDLE_IMAGE}"
 # # create a temporary file for the bundle part of the catalog
 TEMP_BUNDLE_FILE=$(mktemp)
 
-${OPM} render "${BUNDLE_IMAGE}" --output=yaml >"${TEMP_BUNDLE_FILE}"
+${OPM} render --migrate-level bundle-object-to-csv-metadata "${BUNDLE_IMAGE}" --output=yaml >"${TEMP_BUNDLE_FILE}"
 
 cat ${TEMP_BUNDLE_FILE} >>${CATALOG_FILE}
 
@@ -71,5 +71,7 @@ if [ $? -ne 0 ]; then
 else
   echo "Validation passed for ${CATALOG_FILE}"
 fi
+
+sed -i -e 's#quay.io/redhat-user-workloads/ocp-bpfman-tenant/ocp-bpfman-operator-bundle#registry.redhat.io/bpfman/bpfman-operator-bundle#g' ./catalog/index.yaml
 
 echo "Finished running $(basename "$0")"
