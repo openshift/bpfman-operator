@@ -8,11 +8,9 @@ metadata:
     build.appstudio.redhat.com/target_branch: '{{target_branch}}'
     pipelinesascode.tekton.dev/max-keep-runs: "3"
     pipelinesascode.tekton.dev/on-cel-expression: event == "pull_request" && target_branch
-      == "main" &&
-      (".tekton/ocp-bpfman-operator-catalog-ocp4-20-pull-request.yaml".pathChanged() ||
-      "Containerfile.catalog.openshift-4.20".pathChanged() ||
-      "rpms.in.yaml".pathChanged() ||
-      "catalog/***".pathChanged())
+      == "main" && (".tekton/ocp-bpfman-operator-catalog-ocp4-20-pull-request.yaml".pathChanged()
+      || "Containerfile.catalog.openshift-4.20".pathChanged() || "rpms.in.yaml".pathChanged()
+      || "catalog/***".pathChanged())
   creationTimestamp: null
   labels:
     appstudio.openshift.io/application: fbc-4-20
@@ -405,7 +403,8 @@ spec:
       optional: true
     - name: netrc
       optional: true
-  taskRunTemplate: {}
+  taskRunTemplate:
+    serviceAccountName: build-pipeline-ocp-bpfman-operator-catalog-ocp4-20
   workspaces:
   - name: git-auth
     secret:
