@@ -3,7 +3,7 @@ set -eu
 
 #!/usr/bin/env bash
 
-export BPFMAN_OPERATOR_BUNDLE_IMAGE_PULLSPEC="registry.redhat.io/bpfman/bpfman-operator-bundle@sha256:1b70c56ace0392ad38063a628e6e5b55135e1267f67710a3ce04a0f1009d122e"
+export BPFMAN_OPERATOR_BUNDLE_IMAGE_PULLSPEC="registry.redhat.io/bpfman/bpfman-operator-bundle@sha256:ec19e3c29fe756c3a4f569162fe73d845a3b2d4afaa2b37e1b80903406cb15b6"
 export BPFMAN_OPERATOR_IMAGE_PULLSPEC="registry.redhat.io/bpfman/bpfman-rhel9-operator@sha256:e0f8f6298ee725a01b334cdcda15ccc77e38627a3f066d8f3799737e5afaf2b0"
 
 export INDEX_FILE=/configs/bpfman-operator/index.yaml
