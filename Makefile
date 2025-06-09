@@ -263,6 +263,8 @@ vendors: ## Refresh vendors directory.
 
 .PHONY: fmt
 fmt: ## Run go fmt against code.
+	go env
+	env
 	go fmt ./...
 
 .PHONY: verify
