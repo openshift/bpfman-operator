@@ -29,6 +29,9 @@ spec:
   - name: build-platforms
     value:
     - linux/x86_64
+    - linux/arm64
+    - linux/ppc64le
+    - linux/s390x
   - name: dockerfile
     value: Containerfile.catalog.openshift-4.20
   pipelineSpec:
@@ -259,7 +262,7 @@ spec:
       - name: IMAGE_EXPIRES_AFTER
         value: $(params.image-expires-after)
       - name: ALWAYS_BUILD_INDEX
-        value: $(params.build-image-index)
+        value: "true"
       - name: IMAGES
         value:
         - $(tasks.build-images.results.IMAGE_REF[*])
