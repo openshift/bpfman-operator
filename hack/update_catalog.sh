@@ -9,12 +9,6 @@ export BPFMAN_OPERATOR_IMAGE_PULLSPEC="registry.redhat.io/bpfman/bpfman-rhel9-op
 
 export INDEX_FILE=/configs/bpfman-operator/index.yaml
 
-sed -i -e "s|quay.io/bpfman/bpfman-operator:v.*|\"${BPFMAN_OPERATOR_IMAGE_PULLSPEC}\"|g" \
-	"${INDEX_FILE}"
-
-sed -i -e "s|quay.io/bpfman/bpfman-operator-bundle:v.*|\"${BPFMAN_OPERATOR_BUNDLE_IMAGE_PULLSPEC}\"|g" \
-	"${INDEX_FILE}"
-
 # time for some direct modifications to the csv
 python3 - << INDEX_FILE_UPDATE
 import os
