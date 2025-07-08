@@ -7,6 +7,7 @@ FROM builder-runner as builder
 #Copy files to locations specified by labels.
 COPY catalog /configs/bpfman-operator
 COPY hack/update_catalog.sh .
+COPY hack/patch_catalog_build_date.py hack/
 RUN ./update_catalog.sh
 
 # The base image is expected to contain
