@@ -9,6 +9,9 @@ export BPFMAN_OPERATOR_IMAGE_PULLSPEC="registry.redhat.io/bpfman/bpfman-rhel9-op
 
 export INDEX_FILE=/configs/bpfman-operator/index.yaml
 
+# Create backup for diff
+cp "${INDEX_FILE}" "${INDEX_FILE}.bak"
+
 # time for some direct modifications to the csv
 python3 - << INDEX_FILE_UPDATE
 import os
@@ -42,5 +45,15 @@ if manifest is not None:
     dump_manifest(os.getenv('INDEX_FILE'), manifest)
 
 INDEX_FILE_UPDATE
+
+if command -v diff >/dev/null 2>&1; then
+    echo "Changes made:"
+    diff -u "${INDEX_FILE}.bak" "${INDEX_FILE}" || true
+else
+    echo "Changes made (diff utility not available for detailed comparison)"
+fi
+
+# Clean up backup
+rm "${INDEX_FILE}.bak"
 
 cat $INDEX_FILE
