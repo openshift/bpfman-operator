@@ -46,6 +46,9 @@ if manifest is not None:
 
 INDEX_FILE_UPDATE
 
+# Update catalog timestamp
+hack/patch_catalog_build_date.py "${INDEX_FILE}"
+
 if command -v diff >/dev/null 2>&1; then
     echo "Changes made:"
     diff -u "${INDEX_FILE}.bak" "${INDEX_FILE}" || true
