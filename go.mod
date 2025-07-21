@@ -1,6 +1,8 @@
 module github.com/bpfman/bpfman-operator
 
-go 1.24.0
+go 1.23.0
+
+toolchain go1.23.6
 
 require (
 	github.com/bpfman/bpfman v0.5.7-0.20250305151919-a74c631c3643
@@ -16,7 +18,7 @@ require (
 	k8s.io/apimachinery v0.32.3
 	k8s.io/client-go v0.32.3
 	k8s.io/code-generator v0.32.3
-	k8s.io/cri-api v0.33.2
+	k8s.io/cri-api v0.31.1
 	sigs.k8s.io/controller-runtime v0.20.4
 )
 
