@@ -7,12 +7,12 @@ RUN pip install -r requirements.txt
 FROM builder-runner as builder
 
 #Copy files to locations specified by labels.
-COPY bundle/manifests /manifests/
-COPY bundle/metadata /metadata/
-COPY bundle/tests/scorecard /tests/scorecard/
+COPY --chown=default bundle/manifests /manifests/
+COPY --chown=default bundle/metadata /metadata/
+COPY --chown=default bundle/tests/scorecard /tests/scorecard/
 COPY hack/update_bundle_python.py .
 COPY hack/update_configmap.sh .
-RUN chmod +x update_bundle_python.py && ./update_bundle_python.py
+RUN python3 update_bundle_python.py
 RUN ./update_configmap.sh
 
 FROM scratch
@@ -48,4 +48,4 @@ LABEL name="bpfman-operator" \
 # Copy files to locations specified by labels.
 COPY --from=builder /manifests /manifests/
 COPY --from=builder /metadata /metadata/
-COPY bundle/tests/scorecard /tests/scorecard/
+COPY --from=builder /tests/scorecard /tests/scorecard/
