@@ -22,6 +22,8 @@ spec:
   params:
   - name: build-source-image
     value: "true"
+  - name: prefetch-input
+    value: '{"packages": [{"type": "rpm", "path": "rpms.bundle.in.yaml"}]}'
   - name: git-url
     value: '{{source_url}}'
   - name: revision

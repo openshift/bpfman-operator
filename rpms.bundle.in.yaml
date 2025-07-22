@@ -1,0 +1,8 @@
+contentOrigin:
+  repofiles:
+    - ./ubi.repo
+packages: [skopeo, jq, python3, python3-pip]
+context:
+  containerfile:
+    file: Containerfile.bundle.openshift
+    stageName: builder-runner
