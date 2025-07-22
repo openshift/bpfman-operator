@@ -1,5 +1,13 @@
 FROM registry.access.redhat.com/ubi9/ubi-minimal:latest as builder-runner
-RUN microdnf install -y skopeo jq python3 python3-pip
+
+# Use Cachi2 prefetched dependencies instead of live microdnf install
+# This allows hermetic builds while still installing required packages
+RUN if [ -f /tmp/cachi2/cachi2.env ]; then \
+      . /tmp/cachi2/cachi2.env && \
+      microdnf install -y skopeo jq python3 python3-pip; \
+    else \
+      microdnf install -y skopeo jq python3 python3-pip; \
+    fi
 RUN pip3 install --upgrade pip && pip3 install ruamel.yaml==0.17.9
 
 # Use a new stage to enable caching of the package installations for local development
