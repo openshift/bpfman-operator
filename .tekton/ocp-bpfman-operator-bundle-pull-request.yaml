@@ -23,7 +23,7 @@ spec:
   - name: build-source-image
     value: "true"
   - name: prefetch-input
-    value: '{"packages": [{"type": "rpm", "path": "rpms.bundle.in.yaml"}]}'
+    value: '{"packages": [{"type": "rpm"}]}'
   - name: git-url
     value: '{{source_url}}'
   - name: revision

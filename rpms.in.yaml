@@ -1,8 +1,8 @@
 contentOrigin:
   repofiles:
     - ./ubi.repo
-packages: [skopeo, jq, python3, python3-ruamel-yaml-clib, python3-ruamel-yaml]
+packages: [skopeo, jq, python3, python3-pip]
 context:
   containerfile:
-    file: Containerfile.catalog.openshift-4.18
+    file: Containerfile.bundle.openshift
     stageName: builder-runner
