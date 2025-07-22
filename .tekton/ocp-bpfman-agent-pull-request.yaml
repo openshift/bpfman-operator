@@ -35,6 +35,8 @@ spec:
     value: 5d
   - name: dockerfile
     value: Containerfile.bpfman-agent.openshift
+  - name: hermetic
+    value: 'true'
   - name: path-context
     value: .
   - name: build-platforms
