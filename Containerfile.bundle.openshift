@@ -10,9 +10,9 @@ FROM builder-runner as builder
 COPY bundle/manifests /manifests/
 COPY bundle/metadata /metadata/
 COPY bundle/tests/scorecard /tests/scorecard/
-COPY hack/update_bundle.sh .
+COPY hack/update_bundle_python.py .
 COPY hack/update_configmap.sh .
-RUN ./update_bundle.sh
+RUN chmod +x update_bundle_python.py && ./update_bundle_python.py
 RUN ./update_configmap.sh
 
 FROM scratch
