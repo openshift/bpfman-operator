@@ -490,8 +490,7 @@ func (r *NsBpfApplicationReconciler) getBpfAppState(ctx context.Context) (*bpfma
 
 	switch len(appProgramList.Items) {
 	case 1:
-		// We got exactly one BpfApplicationState, so update r.currentAppState
-		r.Logger.V(1).Info("Found BpfApplicationState", "Name", r.currentAppState.Name)
+		r.Logger.V(1).Info("Found BpfApplicationState", "Name", appProgramList.Items[0].Name)
 		return &appProgramList.Items[0], nil
 	case 0:
 		// No BpfApplicationState found, so return nil
@@ -613,7 +612,7 @@ func (r *NsBpfApplicationReconciler) isLoaded(ctx context.Context) bool {
 		// This should never happen because the bpfman load is all or nothing,
 		// and we aren't allowing users to add or remove programs from an
 		// existing BpfApplication.  However, if it does happen, log an error.
-		r.Logger.Error(fmt.Errorf("inconsistent program load state"),
+		r.Logger.Error(fmt.Errorf("inconsistent program load state"), "inconsistent program load state",
 			"allProgramsLoaded", allProgramsLoaded, "someProgramsLoaded", someProgramsLoaded)
 	}
 
@@ -659,7 +658,7 @@ func (r *NsBpfApplicationReconciler) getLoadRequest() (*gobpfman.LoadRequest, er
 func (r *NsBpfApplicationReconciler) load(ctx context.Context) error {
 	loadRequest, err := r.getLoadRequest()
 	if err != nil {
-		return fmt.Errorf("failed to get LoadRequest")
+		return fmt.Errorf("failed to get LoadRequest: %w", err)
 	}
 
 	loadResponse, err := r.BpfmanClient.Load(ctx, loadRequest)
