@@ -6,10 +6,11 @@ export BPFMAN_OPERATOR_BUNDLE_IMAGE_PULLSPEC="registry.redhat.io/bpfman/bpfman-o
 #
 export BPFMAN_OPERATOR_IMAGE_PULLSPEC="registry.redhat.io/bpfman/bpfman-rhel9-operator@sha256:8519e7d7194bdcf3c45cd466493d1bc38f7e7d0ce74abcb7febb2f0ee70d7cd6"
 #
-export INDEX_FILE=/configs/bpfman-operator/index.yaml
+# Copy catalog to writable location for processing
+cp -r /configs/bpfman-operator /tmp/
+export INDEX_FILE=/tmp/bpfman-operator/index.yaml
 
-# Create backup for diff
-cp "${INDEX_FILE}" "${INDEX_FILE}.bak"
+# Process catalog files directly
 
 # time for some direct modifications to the csv
 python3 - << INDEX_FILE_UPDATE
@@ -48,14 +49,9 @@ INDEX_FILE_UPDATE
 # Update catalog timestamp
 hack/patch_catalog_build_date.py "${INDEX_FILE}"
 
-if command -v diff >/dev/null 2>&1; then
-    echo "Changes made:"
-    diff -u "${INDEX_FILE}.bak" "${INDEX_FILE}" || true
-else
-    echo "Changes made (diff utility not available for detailed comparison)"
-fi
+echo "Catalog processing completed"
 
-# Clean up backup
-rm "${INDEX_FILE}.bak"
+# Copy processed catalog back to final location
+cp -r /tmp/bpfman-operator/* /configs/bpfman-operator/
 
 cat $INDEX_FILE

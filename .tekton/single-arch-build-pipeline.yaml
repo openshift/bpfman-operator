@@ -63,8 +63,6 @@ spec:
       params:
       - name: input
         value: "$(params.prefetch-input)"
-      - name: hermetic
-        value: "$(params.hermetic)"
       - name: dev-package-managers
         value: $(params.prefetch-dev-package-managers-enabled)
       - name: SOURCE_ARTIFACT
