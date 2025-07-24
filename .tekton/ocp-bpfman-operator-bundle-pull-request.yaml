@@ -34,8 +34,6 @@ spec:
     value: 5d
   - name: dockerfile
     value: Containerfile.bundle.openshift
-  - name: hermetic
-    value: 'true'
   pipelineRef:
     name: single-arch-build-pipeline
   taskRunTemplate:
