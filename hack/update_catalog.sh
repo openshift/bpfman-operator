@@ -6,7 +6,9 @@ export BPFMAN_OPERATOR_BUNDLE_IMAGE_PULLSPEC="registry.redhat.io/bpfman/bpfman-o
 #
 export BPFMAN_OPERATOR_IMAGE_PULLSPEC="registry.redhat.io/bpfman/bpfman-rhel9-operator@sha256:8519e7d7194bdcf3c45cd466493d1bc38f7e7d0ce74abcb7febb2f0ee70d7cd6"
 #
-export INDEX_FILE=/configs/bpfman-operator/index.yaml
+# Copy catalog to writable location for processing
+cp -r /configs/bpfman-operator /tmp/
+export INDEX_FILE=/tmp/bpfman-operator/index.yaml
 
 # Create backup for diff
 cp "${INDEX_FILE}" "${INDEX_FILE}.bak"
@@ -57,5 +59,8 @@ fi
 
 # Clean up backup
 rm "${INDEX_FILE}.bak"
+
+# Copy processed catalog back to final location
+cp -r /tmp/bpfman-operator/* /configs/bpfman-operator/
 
 cat $INDEX_FILE
