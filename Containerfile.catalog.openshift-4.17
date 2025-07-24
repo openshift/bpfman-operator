@@ -6,7 +6,7 @@ RUN pip install -r requirements.txt
 FROM builder-runner as builder
 
 #Copy files to locations specified by labels.
-COPY catalog /configs/bpfman-operator
+COPY --chown=default:root catalog /configs/bpfman-operator
 COPY hack/update_catalog.sh .
 COPY hack/patch_catalog_build_date.py hack/
 RUN ./update_catalog.sh
