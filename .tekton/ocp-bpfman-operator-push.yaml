@@ -33,8 +33,6 @@ spec:
     value: quay.io/redhat-user-workloads/ocp-bpfman-tenant/ocp-bpfman-operator:{{revision}}
   - name: dockerfile
     value: Containerfile.bpfman-operator.openshift
-  - name: hermetic
-    value: 'true'
   - name: path-context
     value: .
   - name: build-platforms
