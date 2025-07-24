@@ -95,7 +95,7 @@ spec:
       description: Skip checks against built image
       name: skip-checks
       type: string
-    - default: 'true'
+    - default: 'false'
       description: Execute the build with network isolation
       name: hermetic
       type: string
@@ -213,7 +213,7 @@ spec:
       - name: CONTEXT
         value: $(params.path-context)
       - name: HERMETIC
-        value: $(params.hermetic)
+        value: 'true'
       - name: IMAGE_EXPIRES_AFTER
         value: $(params.image-expires-after)
       - name: COMMIT_SHA
