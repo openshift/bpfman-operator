@@ -28,6 +28,8 @@ spec:
     value: quay.io/redhat-user-workloads/ocp-bpfman-tenant/ocp-bpfman-operator-catalog:{{revision}}
   - name: dockerfile
     value: Containerfile.catalog.openshift-4.17
+  - name: hermetic
+    value: 'true'
   pipelineSpec:
     finally:
     - name: show-sbom
@@ -92,7 +94,7 @@ spec:
       description: Skip checks against built image
       name: skip-checks
       type: string
-    - default: 'false'
+    - default: 'true'
       description: Execute the build with network isolation
       name: hermetic
       type: string
@@ -210,7 +212,7 @@ spec:
       - name: CONTEXT
         value: $(params.path-context)
       - name: HERMETIC
-        value: 'true'
+        value: $(params.hermetic)
       - name: IMAGE_EXPIRES_AFTER
         value: $(params.image-expires-after)
       - name: COMMIT_SHA
