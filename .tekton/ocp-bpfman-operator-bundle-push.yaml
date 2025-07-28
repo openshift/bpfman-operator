@@ -10,7 +10,7 @@ metadata:
     pipelinesascode.tekton.dev/on-cel-expression: event == "push" && target_branch
       == "main"  && (".tekton/single-arch-build-pipeline.yaml".pathChanged() || ".tekton/ocp-bpfman-operator-bundle-pull-request.yaml".pathChanged()
       || ".tekton/ocp-bpfman-operator-bundle-push.yaml".pathChanged() || "Containerfile.bundle.openshift".pathChanged()
-      || "bundle/***".pathChanged() || "hack/update_bundle.sh".pathChanged() || "hack/update_configmap.sh".pathChanged())
+      || "bundle/***".pathChanged() || "hack/update_bundle.sh".pathChanged() || "hack/update_configmap.sh".pathChanged() || "config/***".pathChanged())
   creationTimestamp: null
   labels:
     appstudio.openshift.io/application: bpfman-operator
