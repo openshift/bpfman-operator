@@ -2,7 +2,7 @@
 set -eu
 
 # Do not remove empty lines, they are there to reduce conflicts.
-export BPFMAN_OPERATOR_BUNDLE_IMAGE_PULLSPEC="registry.redhat.io/bpfman/bpfman-operator-bundle@sha256:93ae1462be2ba11f49eb46d635ee7356c27c1419ddf86bb52ca28e4b04512c39"
+export BPFMAN_OPERATOR_BUNDLE_IMAGE_PULLSPEC="registry.redhat.io/bpfman/bpfman-operator-bundle@sha256:65c6f429402de21bbe91416adefed69baf6f383626bfd86a9836e9f7f853aae4"
 #
 export BPFMAN_OPERATOR_IMAGE_PULLSPEC="registry.redhat.io/bpfman/bpfman-rhel9-operator@sha256:7a8d074fb5ec90884e75348c066e45cdc14b61cb0c228e99cf81e9b4382d2da9"
 #
