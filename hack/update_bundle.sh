@@ -7,7 +7,6 @@ export BPFMAN_OPERATOR_IMAGE_PULLSPEC="registry.redhat.io/bpfman/bpfman-rhel9-op
 
 export CSV_FILE=/manifests/bpfman-operator.clusterserviceversion.yaml
 
-# Update CSV file
 sed -i -e "s|quay.io/bpfman/bpfman-operator:v.*|\"${BPFMAN_OPERATOR_IMAGE_PULLSPEC}\"|g" \
        -e "s|quay.io/bpfman/bpfman-operator:latest*|\"${BPFMAN_OPERATOR_IMAGE_PULLSPEC}\"|g" \
        -e "s|displayName: Bpfman Operator|displayName: eBPF Manager Operator|g" \
@@ -15,12 +14,6 @@ sed -i -e "s|quay.io/bpfman/bpfman-operator:v.*|\"${BPFMAN_OPERATOR_IMAGE_PULLSP
        -e "s|name: The bpfman Community|name: Red Hat|g" \
        -e "s|url: https://bpfman.io|url: https://www.redhat.com|g" \
 	     "${CSV_FILE}"
-
-# Also update any other manifest files that might contain upstream references
-find /manifests -name "*.yaml" -exec sed -i \
-    -e "s|quay.io/bpfman/bpfman-operator:v.*|\"${BPFMAN_OPERATOR_IMAGE_PULLSPEC}\"|g" \
-    -e "s|quay.io/bpfman/bpfman-operator:latest|\"${BPFMAN_OPERATOR_IMAGE_PULLSPEC}\"|g" \
-    {} \;
 
 export AMD64_BUILT=$(skopeo inspect --raw docker://${BPFMAN_OPERATOR_IMAGE_PULLSPEC} | jq -e '.manifests[] | select(.platform.architecture=="amd64")')
 export ARM64_BUILT=$(skopeo inspect --raw docker://${BPFMAN_OPERATOR_IMAGE_PULLSPEC} | jq -e '.manifests[] | select(.platform.architecture=="arm64")')
