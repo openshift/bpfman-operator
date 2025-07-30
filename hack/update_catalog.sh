@@ -4,7 +4,7 @@ set -eu
 # Do not remove empty lines, they are there to reduce conflicts.
 export BPFMAN_OPERATOR_BUNDLE_IMAGE_PULLSPEC="registry.redhat.io/bpfman/bpfman-operator-bundle@sha256:7d58c1e00fad7032d906c37ba414d5dc1e971f822d75cc81bd24120da4c2bfb1"
 #
-export BPFMAN_OPERATOR_IMAGE_PULLSPEC="registry.redhat.io/bpfman/bpfman-rhel9-operator@sha256:eded3771ab34f99d82f6f1b7374abe70759f4cc0039fe21e399754d7930b02ff"
+export BPFMAN_OPERATOR_IMAGE_PULLSPEC="registry.redhat.io/bpfman/bpfman-rhel9-operator@sha256:84314fd013ffb523050fd1649c687b9a7a111030b5ecd9c048cacde0c851cc47"
 #
 # Copy catalog to writable location for processing
 cp -r /configs/bpfman-operator /tmp/
