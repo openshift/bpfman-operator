@@ -6,7 +6,7 @@ from ruamel.yaml import YAML
 yaml = YAML()
 
 # Configuration
-BPFMAN_OPERATOR_IMAGE_PULLSPEC = "registry.redhat.io/bpfman/bpfman-rhel9-operator@sha256:fd530e80207d584b02e1335a39571cdbfcd659dd9f164322dce02dcaff266ad2"
+BPFMAN_OPERATOR_IMAGE_PULLSPEC = "registry.redhat.io/bpfman/bpfman-rhel9-operator@sha256:84314fd013ffb523050fd1649c687b9a7a111030b5ecd9c048cacde0c851cc47"
 CSV_FILE = "/manifests/bpfman-operator.clusterserviceversion.yaml"
 
 def main():
