@@ -6,8 +6,8 @@ icon:
 name: bpfman-operator
 schema: olm.package
 ---
-image: registry.redhat.io/bpfman/bpfman-operator-bundle@sha256:7f701331ca76d520f9b7ea68a17259b9e5f5ac5fd9ca97fa4b13fd7159ece8fd
-name: bpfman-operator.v0.5.6
+image: registry.redhat.io/bpfman/bpfman-operator-bundle@sha256:36922ea0b333bf60bfd358425681c472db07a99dd07c929383ee3bcc5e93c19f
+name: bpfman-operator.v0.5.7-dev
 package: bpfman-operator
 properties:
 - type: olm.gvk
@@ -30,15 +30,10 @@ properties:
     group: bpfman.io
     kind: ClusterBpfApplicationState
     version: v1alpha1
-- type: olm.gvk.required
-  value:
-    group: security-profiles-operator.x-k8s.io
-    kind: SelinuxProfile
-    version: v1alpha2
 - type: olm.package
   value:
     packageName: bpfman-operator
-    version: 0.5.6
+    version: 0.5.7-dev
 - type: olm.csv.metadata
   value:
     annotations:
@@ -1033,8 +1028,8 @@ properties:
         ]
       capabilities: Basic Install
       categories: OpenShift Optional
-      containerImage: registry.redhat.io/bpfman/bpfman-rhel9-operator@sha256:4f2a1ad26d7e5c5b0902586b159774390175aff6eac0008520afcd81cc85101b
-      createdAt: 09 May 2025, 17:25
+      containerImage: registry.redhat.io/bpfman/bpfman-rhel9-operator@sha256:7a3c4e3bf315ee004833cbbd4e8847b5520afb056fecbe8019528d1f7ef4abf8
+      createdAt: 04 Aug 2025, 08:10
       description: The eBPF manager Operator is designed to manage eBPF programs for
         applications.
       features.operators.openshift.io/cnf: "false"
@@ -1069,7 +1064,7 @@ properties:
         "OpenShift Container Platform", "OpenShift Platform Plus"]'
       operators.operatorframework.io/builder: operator-sdk-v1.27.0
       operators.operatorframework.io/project_layout: go.kubebuilder.io/v3
-      repository: https://github.com/bpfman/bpfman-operator
+      repository: https://github.com/bpfman/bpfman
       support: bpfman Community
     apiServiceDefinitions: {}
     crdDescriptions:
@@ -1100,18 +1095,18 @@ properties:
     description: "The eBPF manager Operator is a Kubernetes Operator for deploying
       [bpfman](https://bpfman.netlify.app/), a system daemon\nfor managing eBPF programs.
       It deploys bpfman itself along with CRDs to make deploying\neBPF programs in
-      Kubernetes much easier.\n\n## Quick Start\n\nTo get bpfman up and running quickly
+      Kubernetes much easier.\n\n## Quick Start\n \nTo get bpfman up and running quickly
       simply click 'install' to deploy the bpfman-operator in the bpfman namespace
       via operator-hub.\n## Configuration\n\nThe `bpfman-config` configmap is automatically
       created in the `bpfman` namespace and used to configure the bpfman deployment.\n\nTo
       edit the config simply run\n\n```bash\nkubectl edit cm bpfman-config\n```\n\nThe
       following fields are adjustable\n\n- `bpfman.agent.image`: The image used for
-      the bpfman-agent`\n- `bpfman.image`: The image used for bpfman`\n- `bpfman.log.level`:
+      the bpfman-agent`\n- `bpfman.image`: The image used for bpfman`\n - `bpfman.log.level`:
       the log level for bpfman, currently supports `debug`, `info`, `warn`, `error`,
       and `fatal`, defaults to `info`\n- `bpfman.agent.log.level`: the log level for
       the bpfman-agent currently supports `info`, `debug`, and `trace` \n\nThe bpfman
       operator deploys eBPF programs via CRDs. The following CRDs are currently available,
-      \n\n- BpfApplication\n- ClusterBpfApplication\n - BpfApplicationState\n- ClusterBpfApplicationState\n\n
+      \n\n- BpfApplication\n- ClusterBpfApplication\n - BpfApplicationState\n - ClusterBpfApplicationState\n\n
       ## More information\n\nPlease checkout the [bpfman community website](https://bpfman.io/)
       for more information."
     displayName: eBPF Manager Operator
@@ -1147,9 +1142,9 @@ properties:
       name: Red Hat
       url: https://www.redhat.com/
 relatedImages:
-- image: registry.redhat.io/bpfman/bpfman-operator-bundle@sha256:7f701331ca76d520f9b7ea68a17259b9e5f5ac5fd9ca97fa4b13fd7159ece8fd
+- image: registry.redhat.io/bpfman/bpfman-operator-bundle@sha256:36922ea0b333bf60bfd358425681c472db07a99dd07c929383ee3bcc5e93c19f
   name: ""
-- image: registry.redhat.io/bpfman/bpfman-rhel9-operator@sha256:4f2a1ad26d7e5c5b0902586b159774390175aff6eac0008520afcd81cc85101b
+- image: registry.redhat.io/bpfman/bpfman-rhel9-operator@sha256:7a3c4e3bf315ee004833cbbd4e8847b5520afb056fecbe8019528d1f7ef4abf8
   name: ""
 schema: olm.bundle
 ---
@@ -1157,4 +1152,4 @@ schema: olm.channel
 package: bpfman-operator
 name: latest
 entries:
-  - name: bpfman-operator.v0.5.6
+  - name: bpfman-operator.v0.5.7-dev
