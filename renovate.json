@@ -1,5 +1,19 @@
 {
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "github>konflux-ci/mintmaker//config/renovate/renovate.json"
+  ],
+  "labels": ["dependencies"],
   "gomod": {
     "enabled": false
-  }
+  },
+  "packageRules": [
+    {
+      "matchManagers": ["pip_requirements"],
+      "groupName": "Python dependencies",
+      "schedule": [
+        "after 5am on saturday"
+      ]
+    }
+  ]
 }
