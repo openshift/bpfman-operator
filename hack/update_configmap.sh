@@ -5,7 +5,7 @@ set -eu
 
 export BPFMAN_AGENT_IMAGE_PULLSPEC="registry.redhat.io/bpfman/bpfman-agent@sha256:0539f7ae71ec473d46393294bd9777420f1d363dec1469f3984974e2fdc670ac"
 
-export BPFMAN_IMAGE_PULLSPEC="registry.redhat.io/bpfman/bpfman@sha256:aea0c0cd881d6d9db81bef381f84ffca42beeb9609db92f3319c2af6820c3e0f"
+export BPFMAN_IMAGE_PULLSPEC="registry.redhat.io/bpfman/bpfman@sha256:1af8ae22ee731bb8d3b02ffb7c08fd48705b66eaa1acf5cbbef2633cc190e375"
 
 export CONFIG_MAP=/manifests/bpfman-config_v1_configmap.yaml
 
