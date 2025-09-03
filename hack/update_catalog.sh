@@ -4,7 +4,7 @@ set -eu
 # Do not remove empty lines, they are there to reduce conflicts.
 export BPFMAN_OPERATOR_BUNDLE_IMAGE_PULLSPEC="registry.redhat.io/bpfman/bpfman-operator-bundle@sha256:6daa0913d39479f21c191c352d6e1709bab4ceed0e922be32dda0c566581fa31"
 #
-export BPFMAN_OPERATOR_IMAGE_PULLSPEC="registry.redhat.io/bpfman/bpfman-rhel9-operator@sha256:00c96cc174f711bf67a567539ab35593f1f1cc9b2b2940ebcd20d43673cc1cb4"
+export BPFMAN_OPERATOR_IMAGE_PULLSPEC="registry.redhat.io/bpfman/bpfman-rhel9-operator@sha256:277681e5eecc8ef1c21ec7f0668ba28be660f561c6f46feb0fac3f79b473ab5c"
 #
 export INDEX_FILE=/configs/bpfman-operator/index.yaml
 
