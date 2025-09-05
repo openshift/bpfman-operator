@@ -19,6 +19,7 @@ package main
 import (
 	"crypto/tls"
 	"flag"
+	"fmt"
 	"os"
 	"path/filepath"
 
@@ -85,6 +86,7 @@ func isOpenshift(client discovery.DiscoveryInterface, _ *rest.Config) (bool, err
 }
 
 func main() {
+	fmt.Println("hello world")
 	var metricsAddr string
 	var enableLeaderElection bool
 	var probeAddr string
