@@ -8,7 +8,7 @@ These tools transform upstream bpfman-operator bundles for Red Hat OpenShift dis
 
 - **Rebranding**: Updates display names, provider information, and descriptions for Red Hat
 - **Image references**: Replaces upstream Quay.io images with Red Hat registry images
-- **Architecture support**: Adds platform labels for amd64, arm64, ppc64le, and s390x
+- **Architecture support**: Adds Operator Framework architecture labels (`operatorframework.io/arch.*`) for amd64, arm64, ppc64le, and s390x to inform OLM which platforms the operator supports
 - **OpenShift features**: Adds annotations for disconnected environments, FIPS compliance, etc.
 
 ## Why Separated?
@@ -25,8 +25,8 @@ This tooling is isolated under `hack/openshift/` because:
 ### `update_bundle.go`
 Transforms ClusterServiceVersion (CSV) files with:
 - Red Hat branding and provider information
-- Architecture support labels
-- OpenShift feature annotations
+- Operator Framework architecture labels (`operatorframework.io/arch.*` and `operatorframework.io/os.*`)
+- OpenShift feature annotations (`features.operators.openshift.io/*`)
 - Red Hat image references
 
 Usage:
