@@ -1,19 +1,47 @@
-FROM registry.access.redhat.com/ubi9/python-312 as builder-runner
+# Red Hat rebranding tool for bpfman-operator OpenShift bundle
+#
+# This Containerfile takes upstream bpfman-operator bundles and
+# transforms them for Red Hat distribution by:
+# - Updating ClusterServiceVersion (CSV) with Red Hat branding and image references
+# - Adding architecture labels and OpenShift feature annotations
+# - Updating ConfigMap with Red Hat image pullspecs
+#
+# To build locally for testing:
+#   podman build -f Containerfile.bundle.openshift -t bpfman-bundle .
+#
+# To use a different Go builder image (for local testing without brew registry access):
+#   podman build -f Containerfile.bundle.openshift --build-arg GO_BUILDER_IMAGE_REF=golang:1.23 -t bpfman-bundle .
+#
+# To test the Go tools locally without container build:
+#   go run hack/openshift/update_bundle.go --dry-run --csv-file bundle/manifests/bpfman-operator.clusterserviceversion.yaml --image-pullspec "$(cat hack/openshift/konflux/images/bpfman-operator.txt)"
+#   go run hack/openshift/update_configmap.go --dry-run --configmap-file bundle/manifests/bpfman-config_v1_configmap.yaml --agent-pullspec "$(cat hack/openshift/konflux/images/bpfman-agent.txt)" --bpfman-pullspec "$(cat hack/openshift/konflux/images/bpfman.txt)"
+#
+# To inspect the resulting bundle:
+#   podman create --name temp-bundle bpfman-bundle
+#   podman cp temp-bundle:/manifests/bpfman-operator.clusterserviceversion.yaml ./
+#   podman rm temp-bundle
 
-COPY --chown=default . .
-RUN pip install -r requirements.txt
+ARG GO_BUILDER_IMAGE_REF=brew.registry.redhat.io/rh-osbs/openshift-golang-builder:v1.23
+FROM ${GO_BUILDER_IMAGE_REF} AS builder
 
-# Use a new stage to enable caching of the package installations for local development
-FROM builder-runner as builder
+WORKDIR /usr/src/redhat-rebrand
 
-#Copy files to locations specified by labels.
-COPY --chown=default bundle/manifests /manifests/
-COPY --chown=default bundle/metadata /metadata/
-COPY --chown=default bundle/tests/scorecard /tests/scorecard/
-COPY hack/update_bundle_python.py .
-COPY hack/update_configmap.sh .
-RUN python3 update_bundle_python.py
-RUN ./update_configmap.sh
+COPY go.mod go.sum ./
+COPY vendor/ ./vendor/
+COPY hack/openshift/ ./hack/openshift/
+
+COPY bundle/manifests /manifests/
+COPY bundle/metadata /metadata/
+COPY bundle/tests/scorecard /tests/scorecard/
+
+RUN go run hack/openshift/update_bundle.go \
+    --csv-file /manifests/bpfman-operator.clusterserviceversion.yaml \
+    --image-pullspec "$(cat hack/openshift/konflux/images/bpfman-operator.txt)"
+
+RUN go run hack/openshift/update_configmap.go \
+    --configmap-file /manifests/bpfman-config_v1_configmap.yaml \
+    --agent-pullspec "$(cat hack/openshift/konflux/images/bpfman-agent.txt)" \
+    --bpfman-pullspec "$(cat hack/openshift/konflux/images/bpfman.txt)"
 
 FROM scratch
 
