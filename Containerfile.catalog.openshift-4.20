@@ -1,14 +1,45 @@
+# Red Hat rebranding tool for bpfman-operator OpenShift catalog
+#
+# This Containerfile takes upstream bpfman-operator catalog files and
+# transforms them for Red Hat distribution by:
+# - Updating catalog index with Red Hat bundle and operator image references
+# - Setting appropriate timestamps for Red Hat releases
+# - Preparing files for OpenShift 4.20 operator registry
+#
+# To build locally for testing:
+#   podman build -f Containerfile.catalog.openshift-4.20 -t bpfman-catalog .
+#
+# To use a different Go builder image (for local testing without brew registry access):
+#   podman build -f Containerfile.catalog.openshift-4.20 --build-arg GO_BUILDER_IMAGE_REF=golang:1.23 -t bpfman-catalog .
+#
+# To test the Go tool locally without container build:
+#   go run hack/openshift/update_catalog.go --dry-run --index-file catalog/index.yaml --bundle-pullspec "$(cat hack/openshift/konflux/images/bpfman-operator-bundle.txt)" --operator-pullspec "$(cat hack/openshift/konflux/images/bpfman-operator.txt)"
+#
+# To inspect the resulting catalog:
+#   podman create --name temp-catalog bpfman-catalog
+#   podman cp temp-catalog:/configs/bpfman-operator/index.yaml ./
+#   podman rm temp-catalog
+
+# Build Go transformation tool and transform catalog files
+ARG GO_BUILDER_IMAGE_REF=brew.registry.redhat.io/rh-osbs/openshift-golang-builder:v1.23
+FROM ${GO_BUILDER_IMAGE_REF} AS builder
+WORKDIR /usr/src/redhat-rebrand
+COPY go.mod go.sum ./
+COPY vendor/ ./vendor/
+COPY hack/openshift/ ./hack/openshift/
+COPY catalog /configs/bpfman-operator
+
+# Transform catalog files in builder stage
+RUN go run hack/openshift/update_catalog.go \
+    --index-file /configs/bpfman-operator/index.yaml \
+    --bundle-pullspec "$(cat hack/openshift/konflux/images/bpfman-operator-bundle.txt)" \
+    --operator-pullspec "$(cat hack/openshift/konflux/images/bpfman-operator.txt)"
+
 # The base image is expected to contain
 # /bin/opm (with a serve subcommand) and /bin/grpc_health_probe
 FROM brew.registry.redhat.io/rh-osbs/openshift-ose-operator-registry-rhel9:v4.20
 
-# Copy files to final location and process in place
-COPY catalog /configs/bpfman-operator
-COPY hack/update_catalog.sh .
-
-# USER root required because base image runs as uid=1001 but we need write access to /configs
-USER root
-RUN ./update_catalog.sh && rm ./update_catalog.sh
+COPY --from=builder /configs/bpfman-operator /configs/bpfman-operator
 
 # Configure the entrypoint and command
 ENTRYPOINT ["/bin/opm"]

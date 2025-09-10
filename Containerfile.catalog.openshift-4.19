@@ -1,14 +1,23 @@
+# Build Go transformation tool and transform catalog files
+ARG GO_BUILDER_IMAGE_REF=brew.registry.redhat.io/rh-osbs/openshift-golang-builder:v1.23
+FROM ${GO_BUILDER_IMAGE_REF} AS builder
+WORKDIR /usr/src/redhat-rebrand
+COPY go.mod go.sum ./
+COPY vendor/ ./vendor/
+COPY hack/openshift/ ./hack/openshift/
+COPY catalog /configs/bpfman-operator
+
+# Transform catalog files in builder stage
+RUN go run hack/openshift/update_catalog.go \
+    --index-file /configs/bpfman-operator/index.yaml \
+    --bundle-pullspec "$(cat hack/openshift/konflux/images/bpfman-operator-bundle.txt)" \
+    --operator-pullspec "$(cat hack/openshift/konflux/images/bpfman-operator.txt)"
+
 # The base image is expected to contain
 # /bin/opm (with a serve subcommand) and /bin/grpc_health_probe
 FROM registry.redhat.io/openshift4/ose-operator-registry-rhel9:v4.19
 
-# Copy files to final location and process in place
-COPY catalog /configs/bpfman-operator
-COPY hack/update_catalog.sh .
-
-# USER root required because base image runs as uid=1001 but we need write access to /configs
-USER root
-RUN ./update_catalog.sh && rm ./update_catalog.sh
+COPY --from=builder /configs/bpfman-operator /configs/bpfman-operator
 
 # Configure the entrypoint and command
 ENTRYPOINT ["/bin/opm"]
