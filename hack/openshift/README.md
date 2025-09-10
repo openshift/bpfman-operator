@@ -67,7 +67,27 @@ This decouples image references from build logic, enabling Konflux to manage ima
 
 ## Local Testing
 
-Test the tools locally without container builds:
+Test the tools locally without container builds using the provided Makefile targets:
+
+```bash
+# Test bundle transformation
+make test-bundle
+
+# Test configmap transformation
+make test-configmap
+
+# Test both
+make test-all
+```
+
+From the project root, you can also run:
+
+```bash
+# Test from project root using -C flag
+make -C hack/openshift/ test-all
+```
+
+Or run the commands directly:
 
 ```bash
 # Test bundle transformation
@@ -104,17 +124,27 @@ The tooling requires a single external YAML dependency (`gopkg.in/yaml.v3`). Cur
 
 Should Kubernetes drop YAML support in the future (though this seems unlikely), we would need to create local `go.mod` and `go.sum` files in this directory and vendor the YAML dependency locally.
 
-## Building
+## Building and Testing
 
-To format and build all tools:
+Available Makefile targets:
 
 ```bash
+# Format and build all tools
 make
+
+# Test bundle transformation (dry-run)
+make test-bundle
+
+# Test configmap transformation (dry-run)
+make test-configmap
+
+# Test all transformations (dry-run)
+make test-all
 ```
 
-This will:
-1. Format all Go files with `go fmt ./...`  
+The default `make` target will:
+1. Format all Go files with `go fmt ./...`
 2. Build all three tools to `/tmp/`:
    - `/tmp/update_configmap`
-   - `/tmp/update_bundle` 
+   - `/tmp/update_bundle`
    - `/tmp/update_catalog`
