@@ -97,3 +97,24 @@ hack/openshift/
 ```
 
 The transformation tools are kept separate from the image references they consume. This makes local testing straightforward and allows Konflux to update images without touching the build logic.
+
+## Dependencies
+
+The tooling requires a single external YAML dependency (`gopkg.in/yaml.v3`). Currently, this dependency is satisfied through the project root's `vendor/` directory and `go.{mod,sum}` files.
+
+Should Kubernetes drop YAML support in the future (though this seems unlikely), we would need to create local `go.mod` and `go.sum` files in this directory and vendor the YAML dependency locally.
+
+## Building
+
+To format and build all tools:
+
+```bash
+make
+```
+
+This will:
+1. Format all Go files with `go fmt ./...`  
+2. Build all three tools to `/tmp/`:
+   - `/tmp/update_configmap`
+   - `/tmp/update_bundle` 
+   - `/tmp/update_catalog`

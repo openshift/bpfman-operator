@@ -9,16 +9,11 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-const (
-	defaultAgentPullspec  = "registry.redhat.io/bpfman/bpfman-agent@sha256:4105eb14731e7f41c177f8a5ac0be7447967f4ec3338967e15f398d3147225b3"
-	defaultBpfmanPullspec = "registry.redhat.io/bpfman/bpfman@sha256:4c31043d37cd20bb43fcb64d38b9c8cdfb8d1c9317d7d8b24051f9005abd7112"
-)
-
 func main() {
 	var (
 		configMapFile  = flag.String("configmap-file", "", "Path to the ConfigMap file to update")
-		agentPullspec  = flag.String("agent-pullspec", defaultAgentPullspec, "bpfman-agent image pullspec")
-		bpfmanPullspec = flag.String("bpfman-pullspec", defaultBpfmanPullspec, "bpfman image pullspec")
+		agentPullspec  = flag.String("agent-pullspec", "", "bpfman-agent image pullspec")
+		bpfmanPullspec = flag.String("bpfman-pullspec", "", "bpfman image pullspec")
 		outputFile     = flag.String("output", "", "Output file (defaults to input file)")
 		dryRun         = flag.Bool("dry-run", false, "Show what would be changed without modifying files")
 		help           = flag.Bool("help", false, "Show help message")
@@ -62,6 +57,18 @@ func main() {
 
 	if *configMapFile == "" {
 		fmt.Fprintf(os.Stderr, "Error: ConfigMap file is required\n\n")
+		flag.Usage()
+		os.Exit(1)
+	}
+
+	if *agentPullspec == "" {
+		fmt.Fprintf(os.Stderr, "Error: Agent pullspec is required\n\n")
+		flag.Usage()
+		os.Exit(1)
+	}
+
+	if *bpfmanPullspec == "" {
+		fmt.Fprintf(os.Stderr, "Error: Bpfman pullspec is required\n\n")
 		flag.Usage()
 		os.Exit(1)
 	}

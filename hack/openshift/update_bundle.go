@@ -10,14 +10,10 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-const (
-	defaultImagePullspec = "registry.redhat.io/bpfman/bpfman-rhel9-operator@sha256:277681e5eecc8ef1c21ec7f0668ba28be660f561c6f46feb0fac3f79b473ab5c"
-)
-
 func main() {
 	var (
 		csvFile       = flag.String("csv-file", "", "Path to the CSV file to update")
-		imagePullspec = flag.String("image-pullspec", defaultImagePullspec, "Operator image pullspec")
+		imagePullspec = flag.String("image-pullspec", "", "Operator image pullspec")
 		outputFile    = flag.String("output", "", "Output file (defaults to input file)")
 		dryRun        = flag.Bool("dry-run", false, "Show what would be changed without modifying files")
 		help          = flag.Bool("help", false, "Show help message")
@@ -60,6 +56,12 @@ func main() {
 
 	if *csvFile == "" {
 		fmt.Fprintf(os.Stderr, "Error: CSV file is required\n\n")
+		flag.Usage()
+		os.Exit(1)
+	}
+
+	if *imagePullspec == "" {
+		fmt.Fprintf(os.Stderr, "Error: Image pullspec is required\n\n")
 		flag.Usage()
 		os.Exit(1)
 	}
