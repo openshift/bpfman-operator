@@ -1,8 +1,11 @@
+packages:
+  - diffutils
 contentOrigin:
   repofiles:
     - ./ubi.repo
-packages: []
+arches:
+  - x86_64
 context:
   containerfile:
     file: Containerfile.bundle.openshift
-    stageName: builder-runner
+    stageName: builder
