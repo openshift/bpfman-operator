@@ -3,10 +3,11 @@ kind: PipelineRun
 metadata:
   annotations:
     build.appstudio.openshift.io/repo: https://github.com/openshift/bpfman-operator?rev={{revision}}
+    build.appstudio.openshift.io/build-nudge-files: hack/openshift/konflux/images/bpfman-operator-bundle.txt, hack/openshift/konflux/images/bpfman-operator.txt
     build.appstudio.redhat.com/commit_sha: '{{revision}}'
     build.appstudio.redhat.com/target_branch: '{{target_branch}}'
     pipelinesascode.tekton.dev/max-keep-runs: '3'
-    pipelinesascode.tekton.dev/on-cel-expression: event == "push" && target_branch == "release-4.17" && ( ".tekton/ocp-bpfman-operator-catalog-pull-request.yaml".pathChanged() || ".tekton/ocp-bpfman-operator-catalog-push.yaml".pathChanged() || "Containerfile.catalog.openshift-4.17".pathChanged() || "catalog/***".pathChanged() || "rpms.in.yaml".pathChanged() || "hack/update_catalog.sh".pathChanged() || "requirements.txt".pathChanged())
+    pipelinesascode.tekton.dev/on-cel-expression: event == "push" && target_branch == "release-4.17" && ( ".tekton/ocp-bpfman-operator-catalog-pull-request.yaml".pathChanged() || ".tekton/ocp-bpfman-operator-catalog-push.yaml".pathChanged() || "Containerfile.catalog.openshift-4.17".pathChanged() || "catalog/***".pathChanged() || "rpms.in.yaml".pathChanged() || "hack/openshift/***".pathChanged() || "requirements.txt".pathChanged())
   creationTimestamp:
   labels:
     appstudio.openshift.io/application: fbc-4-17

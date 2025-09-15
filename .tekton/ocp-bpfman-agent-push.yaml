@@ -2,7 +2,7 @@ apiVersion: tekton.dev/v1
 kind: PipelineRun
 metadata:
   annotations:
-    build.appstudio.openshift.io/build-nudge-files: hack/update_configmap.sh
+    build.appstudio.openshift.io/build-nudge-files: hack/openshift/konflux/images/bpfman.txt
     build.appstudio.openshift.io/repo: https://github.com/openshift/bpfman-operator?rev={{revision}}
     build.appstudio.redhat.com/commit_sha: '{{revision}}'
     build.appstudio.redhat.com/target_branch: '{{target_branch}}'
@@ -13,7 +13,7 @@ metadata:
       || "controllers/***".pathChanged() || "cmd/***".pathChanged() || "Containerfile.bpfman-agent.openshift".pathChanged()
       || "go.mod".pathChanged() || "go.sum".pathChanged() || "Makefile".pathChanged()
       || "pkg/***".pathChanged() || "internal/***".pathChanged() || "test/***".pathChanged()
-      || "vendor/***".pathChanged() || "config/***".pathChanged())
+      || "vendor/***".pathChanged() || "config/***".pathChanged() || "hack/openshift/***".pathChanged())
   creationTimestamp: null
   labels:
     appstudio.openshift.io/application: bpfman-operator
