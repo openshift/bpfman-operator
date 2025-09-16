@@ -39,6 +39,12 @@ transform-catalog-container:
 
 transform-all-container: transform-bundle-container transform-catalog-container
 
+# Sync VERSION from upstream to all OpenShift Containerfiles. Run this
+# after merging from upstream or when VERSION changes.
+set-version:
+	@echo "Syncing upstream VERSION to OpenShift Containerfiles..."
+	@./sync-version.sh
+
 # Generate RPM lockfile for Konflux builds
 generate-rpm-lockfile:
 	cd ../.. && hack/openshift/generate-rpm-lockfile.sh
