@@ -1,19 +1,54 @@
-FROM registry.access.redhat.com/ubi9/python-312 as builder-runner
+# Red Hat rebranding tool for bpfman-operator OpenShift bundle
+#
+# This Containerfile takes upstream bpfman-operator bundles and
+# transforms them for Red Hat distribution by:
+# - Updating ClusterServiceVersion (CSV) with Red Hat branding and image references
+# - Adding architecture labels and OpenShift feature annotations
+# - Updating ConfigMap with Red Hat image pullspecs
+#
+# To test the Python tools locally without container build:
+#   make -C hack/openshift transform-bundle transform-configmap
+#
+# To build locally within a container:
+#   make -C hack/openshift container-transform-bundle
+#
 
-COPY --chown=default . .
-RUN pip install -r requirements.txt
+ARG PYTHON_BUILDER_IMAGE_REF=registry.access.redhat.com/ubi9/python-312
+FROM ${PYTHON_BUILDER_IMAGE_REF} AS builder
 
-# Use a new stage to enable caching of the package installations for local development
-FROM builder-runner as builder
+WORKDIR /usr/src/bundle-transform
 
-#Copy files to locations specified by labels.
+RUN pip3 install ruamel.yaml
+
+# Switch to root to install system packages, then back to default
+# user.
+USER root
+RUN dnf install -y diffutils
+USER default
+
+COPY --chown=default hack/openshift/ ./hack/openshift/
+COPY --chown=default hack/konflux/ ./hack/konflux/
 COPY --chown=default bundle/manifests /manifests/
 COPY --chown=default bundle/metadata /metadata/
 COPY --chown=default bundle/tests/scorecard /tests/scorecard/
-COPY hack/update_bundle_python.py .
-COPY hack/update_configmap.sh .
-RUN python3 update_bundle_python.py
-RUN ./update_configmap.sh
+
+RUN cp /manifests/bpfman-operator.clusterserviceversion.yaml /tmp/bpfman-operator.clusterserviceversion.yaml.orig
+RUN cp /manifests/bpfman-config_v1_configmap.yaml /tmp/bpfman-config_v1_configmap.yaml.orig
+
+RUN hack/openshift/update-bundle.py \
+    --csv-file /manifests/bpfman-operator.clusterserviceversion.yaml \
+    --image-pullspec "$(cat hack/konflux/images/bpfman-operator.txt)"
+
+RUN hack/openshift/update-configmap.py \
+    --configmap-file /manifests/bpfman-config_v1_configmap.yaml \
+    --agent-pullspec "$(cat hack/konflux/images/bpfman-agent.txt)" \
+    --bpfman-pullspec "$(cat hack/konflux/images/bpfman.txt)"
+
+RUN echo "=== CSV transformation changes ===" && \
+    diff -u /tmp/bpfman-operator.clusterserviceversion.yaml.orig /manifests/bpfman-operator.clusterserviceversion.yaml || true
+
+RUN echo "=== ConfigMap transformation changes ===" && \
+    diff -u /tmp/bpfman-config_v1_configmap.yaml.orig /manifests/bpfman-config_v1_configmap.yaml || true
 
 FROM scratch
 
@@ -39,8 +74,8 @@ LABEL name="bpfman-operator" \
       distribution-scope=public \
       io.k8s.description="The bpfman-operator manage bpfman programs on every node. ." \
       io.openshift.tags="bpfman-operator" \
-      version="0.5.6" \
-      release="0.5.6" \
+      version="0.5.7-dev" \
+      release="0.5.7-dev" \
       url="https://github.com/openshift/bpfman-operator" \
       vendor="Red Hat, Inc." \
       summary="Bpfman Operator"

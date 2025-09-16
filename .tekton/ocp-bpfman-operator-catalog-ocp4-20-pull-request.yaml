@@ -7,7 +7,7 @@ metadata:
     build.appstudio.redhat.com/pull_request_number: '{{pull_request_number}}'
     build.appstudio.redhat.com/target_branch: '{{target_branch}}'
     pipelinesascode.tekton.dev/max-keep-runs: '3'
-    pipelinesascode.tekton.dev/on-cel-expression: event == "pull_request" && target_branch == "main" && (".tekton/ocp-bpfman-operator-catalog-ocp4-20-pull-request.yaml".pathChanged() || "Containerfile.catalog.openshift-4.20".pathChanged() || "rpms.in.yaml".pathChanged() || "catalog/***".pathChanged() || "config/***".pathChanged() || "requirements.txt".pathChanged())
+    pipelinesascode.tekton.dev/on-cel-expression: event == "pull_request" && target_branch == "release-4.20" && (".tekton/ocp-bpfman-operator-catalog-ocp4-20-pull-request.yaml".pathChanged() || "Containerfile.catalog.openshift-4.20".pathChanged() || "rpms.in.yaml".pathChanged() || "catalog/***".pathChanged() || "config/***".pathChanged() || "hack/openshift/***".pathChanged() || "requirements.txt".pathChanged())
   creationTimestamp:
   labels:
     appstudio.openshift.io/application: fbc-4-20
@@ -20,7 +20,7 @@ spec:
   - name: build-source-image
     value: 'true'
   - name: prefetch-input
-    value: '{"packages": [{"type": "rpm"}, {"type": "pip", "path": "."}]}'
+    value: '{"packages": [{"type": "rpm", "path": "."}, {"type": "pip", "path": "."}]}'
   - name: git-url
     value: '{{source_url}}'
   - name: revision
