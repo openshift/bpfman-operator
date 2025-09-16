@@ -1,1 +1,1 @@
-registry.redhat.io/bpfman/bpfman-operator-bundle@sha256:b6168b6ed2062aef4b4bb3fb4431960487abc481950da0716372911005365cb5
+registry.redhat.io/bpfman/bpfman-operator-bundle@sha256:86266cc8916bc96ccde9d6e0e2e4e8ed64a8d4d55bf1dccbe2480f3ead085e98
