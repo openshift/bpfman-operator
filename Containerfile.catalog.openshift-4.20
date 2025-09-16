@@ -24,6 +24,7 @@ USER root
 RUN dnf install -y diffutils
 
 COPY --chown=root hack/openshift/ ./hack/openshift/
+COPY --chown=root hack/konflux/ ./hack/konflux/
 COPY --chown=root catalog /configs/bpfman-operator
 
 # Create copy for diff comparison
@@ -32,8 +33,8 @@ RUN cp /configs/bpfman-operator/index.yaml /configs/bpfman-operator/index.yaml.o
 # Transform catalog files in builder stage using bash
 RUN hack/openshift/update-catalog.sh \
     --index-file /configs/bpfman-operator/index.yaml \
-    --bundle-pullspec "$(cat hack/openshift/konflux/images/bpfman-operator-bundle.txt)" \
-    --operator-pullspec "$(cat hack/openshift/konflux/images/bpfman-operator.txt)"
+    --bundle-pullspec "$(cat hack/konflux/images/bpfman-operator-bundle.txt)" \
+    --operator-pullspec "$(cat hack/konflux/images/bpfman-operator.txt)"
 
 # Show what changed in catalog file
 RUN echo "=== Catalog transformation changes ===" && \

@@ -27,6 +27,7 @@ RUN dnf install -y diffutils
 USER default
 
 COPY --chown=default hack/openshift/ ./hack/openshift/
+COPY --chown=default hack/konflux/ ./hack/konflux/
 COPY --chown=default bundle/manifests /manifests/
 COPY --chown=default bundle/metadata /metadata/
 COPY --chown=default bundle/tests/scorecard /tests/scorecard/
@@ -36,12 +37,12 @@ RUN cp /manifests/bpfman-config_v1_configmap.yaml /tmp/bpfman-config_v1_configma
 
 RUN hack/openshift/update-bundle.py \
     --csv-file /manifests/bpfman-operator.clusterserviceversion.yaml \
-    --image-pullspec "$(cat hack/openshift/konflux/images/bpfman-operator.txt)"
+    --image-pullspec "$(cat hack/konflux/images/bpfman-operator.txt)"
 
 RUN hack/openshift/update-configmap.py \
     --configmap-file /manifests/bpfman-config_v1_configmap.yaml \
-    --agent-pullspec "$(cat hack/openshift/konflux/images/bpfman-agent.txt)" \
-    --bpfman-pullspec "$(cat hack/openshift/konflux/images/bpfman.txt)"
+    --agent-pullspec "$(cat hack/konflux/images/bpfman-agent.txt)" \
+    --bpfman-pullspec "$(cat hack/konflux/images/bpfman.txt)"
 
 RUN echo "=== CSV transformation changes ===" && \
     diff -u /tmp/bpfman-operator.clusterserviceversion.yaml.orig /manifests/bpfman-operator.clusterserviceversion.yaml || true

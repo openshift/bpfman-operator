@@ -15,19 +15,19 @@ help:
 transform-bundle:
 	./update-bundle.py \
 		--csv-file ../../bundle/manifests/bpfman-operator.clusterserviceversion.yaml \
-		--image-pullspec "$$(cat konflux/images/bpfman-operator.txt)"
+		--image-pullspec "$$(cat ../konflux/images/bpfman-operator.txt)"
 
 transform-configmap:
 	./update-configmap.py \
 		--configmap-file ../../bundle/manifests/bpfman-config_v1_configmap.yaml \
-		--agent-pullspec "$$(cat konflux/images/bpfman-agent.txt)" \
-		--bpfman-pullspec "$$(cat konflux/images/bpfman.txt)"
+		--agent-pullspec "$$(cat ../konflux/images/bpfman-agent.txt)" \
+		--bpfman-pullspec "$$(cat ../konflux/images/bpfman.txt)"
 
 transform-catalog:
 	./update-catalog.sh \
 		--index-file ../../catalog/index.yaml \
-		--bundle-pullspec "$$(cat konflux/images/bpfman-operator-bundle.txt)" \
-		--operator-pullspec "$$(cat konflux/images/bpfman-operator.txt)"
+		--bundle-pullspec "$$(cat ../konflux/images/bpfman-operator-bundle.txt)" \
+		--operator-pullspec "$$(cat ../konflux/images/bpfman-operator.txt)"
 
 # Container-based transformation targets
 # Run these with: make -C hack/openshift/ transform-*-container
