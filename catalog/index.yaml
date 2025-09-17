@@ -1028,7 +1028,7 @@ properties:
         ]
       capabilities: Basic Install
       categories: OpenShift Optional
-      containerImage: registry.redhat.io/bpfman/bpfman-rhel9-operator@sha256:a69bd5b5a434a491dc0587f2b68c674a59f137c646f2efb2e0decd5cdbd227df
+      containerImage: registry.redhat.io/bpfman/bpfman-rhel9-operator@sha256:e45e23ff8c2a00423bdc6a828ee1cd124260578b69b1e45408e5802ac203b338
       createdAt: 04 Aug 2025, 08:10
       description: The eBPF manager Operator is designed to manage eBPF programs for
         applications.
@@ -1144,7 +1144,7 @@ properties:
 relatedImages:
 - image: registry.redhat.io/bpfman/bpfman-operator-bundle@sha256:36922ea0b333bf60bfd358425681c472db07a99dd07c929383ee3bcc5e93c19f
   name: ""
-- image: registry.redhat.io/bpfman/bpfman-rhel9-operator@sha256:a69bd5b5a434a491dc0587f2b68c674a59f137c646f2efb2e0decd5cdbd227df
+- image: registry.redhat.io/bpfman/bpfman-rhel9-operator@sha256:e45e23ff8c2a00423bdc6a828ee1cd124260578b69b1e45408e5802ac203b338
   name: ""
 schema: olm.bundle
 ---
