@@ -9,7 +9,12 @@ metadata:
     pipelinesascode.tekton.dev/cancel-in-progress: "true"
     pipelinesascode.tekton.dev/max-keep-runs: "3"
     pipelinesascode.tekton.dev/on-cel-expression: event == "pull_request" && target_branch
-      == "main"
+      == "main" && (".tekton/multi-arch-build-pipeline.yaml".pathChanged() || ".tekton/bpfman-agent-ystream-pull-request.yaml".pathChanged()
+      || ".tekton/bpfman-agent-ystream-push.yaml".pathChanged() || "apis/***".pathChanged()
+      || "controllers/***".pathChanged() || "cmd/***".pathChanged() || "Containerfile.bpfman-agent.openshift".pathChanged()
+      || "go.mod".pathChanged() || "go.sum".pathChanged() || "Makefile".pathChanged()
+      || "pkg/***".pathChanged() || "internal/***".pathChanged() || "test/***".pathChanged()
+      || "vendor/***".pathChanged() || "config/***".pathChanged())
   creationTimestamp: null
   labels:
     appstudio.openshift.io/application: bpfman-ystream

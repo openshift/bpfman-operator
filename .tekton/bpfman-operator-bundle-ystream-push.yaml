@@ -8,7 +8,10 @@ metadata:
     pipelinesascode.tekton.dev/cancel-in-progress: "false"
     pipelinesascode.tekton.dev/max-keep-runs: "3"
     pipelinesascode.tekton.dev/on-cel-expression: event == "push" && target_branch
-      == "main"
+      == "main" && (".tekton/single-arch-build-pipeline.yaml".pathChanged() || ".tekton/bpfman-operator-bundle-ystream-pull-request.yaml".pathChanged()
+      || ".tekton/bpfman-operator-bundle-ystream-push.yaml".pathChanged() || "Containerfile.bundle.openshift".pathChanged()
+      || "bundle/***".pathChanged() || "hack/openshift/***".pathChanged() || "config/***".pathChanged()
+      || "rpms.in.yaml".pathChanged() || "requirements.txt".pathChanged())
   creationTimestamp: null
   labels:
     appstudio.openshift.io/application: bpfman-ystream
