@@ -358,7 +358,7 @@ spec:
       description: Skip checks against built image
       name: skip-checks
       type: string
-    - default: "false"
+    - default: "true"
       description: Execute the build with network isolation
       name: hermetic
       type: string
@@ -381,7 +381,7 @@ spec:
     - name: build-source-image
       type: string
       description: Build a source image.
-      default: 'false'
+      default: 'true'
     workspaces:
     - name: git-auth
       optional: true
