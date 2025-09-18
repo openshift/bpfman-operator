@@ -30,6 +30,8 @@ spec:
     value: quay.io/redhat-user-workloads/ocp-bpfman-tenant/bpfman-operator-bundle-ystream:{{revision}}
   - name: dockerfile
     value: Containerfile.bundle.openshift
+  - name: prefetch-input
+    value: '{"packages": [{"type": "rpm", "path": "."}, {"type": "pip", "path": "."}]}'
   pipelineRef:
     name: single-arch-build-pipeline
   taskRunTemplate:

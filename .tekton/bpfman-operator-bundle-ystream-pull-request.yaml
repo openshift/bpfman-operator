@@ -32,6 +32,8 @@ spec:
     value: 5d
   - name: dockerfile
     value: Containerfile.bundle.openshift
+  - name: prefetch-input
+    value: '{"packages": [{"type": "rpm", "path": "."}, {"type": "pip", "path": "."}]}'
   pipelineRef:
     name: single-arch-build-pipeline
   taskRunTemplate:
