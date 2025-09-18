@@ -381,7 +381,7 @@ spec:
     - name: build-source-image
       type: string
       description: Build a source image.
-      default: 'false'
+      default: 'true'
     workspaces:
     - name: git-auth
       optional: true
