@@ -156,6 +156,11 @@ Current y-stream components:
 To stop Mintmaker from opening PRs for a component (effectively freezing it),
 use the `mintmaker.appstudio.redhat.com/disabled` annotation.
 
+**Important**: The mintmaker annotation only prevents Mintmaker from creating
+update PRs. It does NOT prevent PipelinesAsCode from triggering builds when
+code changes are pushed. To fully disable a component's pipelines, you must
+also set the CEL expression to `"false"` in the `.tekton/*.yaml` files.
+
 #### Disable legacy components:
 ```bash
 # Disable ocp-* components in bpfman
