@@ -116,3 +116,66 @@ Let's trace what happens when the Rust daemon (bpfman) gets updated:
 
 **End result**: The operator can now deploy matched versions of the daemon
 and agent that are guaranteed to be compatible.
+
+## Managing Component Transitions
+
+When transitioning between component versions or naming conventions, you may need
+to disable older components to prevent unnecessary builds and PR generation.
+
+### Legacy Components (ocp-*)
+
+The following legacy components are being replaced by y-stream equivalents:
+
+**In bpfman repository:**
+- `ocp-bpfman` → replaced by `bpfman-daemon-ystream`
+
+**In bpfman-operator repository:**
+- `ocp-bpfman-agent` → replaced by `bpfman-agent-ystream`
+- `ocp-bpfman-operator` → replaced by `bpfman-operator-ystream`
+- `ocp-bpfman-operator-bundle` → replaced by `bpfman-operator-bundle-ystream`
+- `ocp-bpfman-operator-catalog` → catalog components remain separate per OCP version
+- `ocp-bpfman-operator-catalog-ocp4-18`
+- `ocp-bpfman-operator-catalog-ocp4-19`
+- `ocp-bpfman-operator-catalog-ocp4-20`
+
+### Y-Stream Components
+
+The y-stream components follow the naming pattern `<component>-ystream` and provide:
+- Consistent versioning across related components
+- Better alignment with downstream release processes
+- Simplified pipeline configurations using shared defaults
+
+Current y-stream components:
+- `bpfman-daemon-ystream` (built from bpfman repository)
+- `bpfman-agent-ystream` (built from bpfman-operator repository)
+- `bpfman-operator-ystream` (built from bpfman-operator repository)
+- `bpfman-operator-bundle-ystream` (built from bpfman-operator repository)
+
+### Disabling/Enabling Components
+
+To stop Mintmaker from opening PRs for a component (effectively freezing it),
+use the `mintmaker.appstudio.redhat.com/disabled` annotation.
+
+#### Disable legacy components:
+```bash
+# Disable ocp-* components in bpfman
+oc -n ocp-bpfman-tenant annotate component/ocp-bpfman mintmaker.appstudio.redhat.com/disabled=true
+
+# Disable ocp-* components in bpfman-operator
+oc -n ocp-bpfman-tenant annotate component/ocp-bpfman-agent mintmaker.appstudio.redhat.com/disabled=true
+oc -n ocp-bpfman-tenant annotate component/ocp-bpfman-operator mintmaker.appstudio.redhat.com/disabled=true
+oc -n ocp-bpfman-tenant annotate component/ocp-bpfman-operator-bundle mintmaker.appstudio.redhat.com/disabled=true
+oc -n ocp-bpfman-tenant annotate component/ocp-bpfman-operator-catalog mintmaker.appstudio.redhat.com/disabled=true
+oc -n ocp-bpfman-tenant annotate component/ocp-bpfman-operator-catalog-ocp4-18 mintmaker.appstudio.redhat.com/disabled=true
+oc -n ocp-bpfman-tenant annotate component/ocp-bpfman-operator-catalog-ocp4-19 mintmaker.appstudio.redhat.com/disabled=true
+oc -n ocp-bpfman-tenant annotate component/ocp-bpfman-operator-catalog-ocp4-20 mintmaker.appstudio.redhat.com/disabled=true
+```
+
+#### Re-enable components (if needed):
+To re-enable a component, use the same command with a `-` after `disabled`:
+```bash
+oc -n ocp-bpfman-tenant annotate component/ocp-bpfman mintmaker.appstudio.redhat.com/disabled-
+```
+
+**Note**: This approach is based on the pattern documented by the
+[NetObserv team](https://github.com/netobserv/network-observability-operator/blob/main/docs/Konflux.md#freezing-zstream).
