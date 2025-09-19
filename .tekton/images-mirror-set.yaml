@@ -6,14 +6,18 @@ spec:
   imageDigestMirrors:
     - source: registry.redhat.io/bpfman/bpfman-agent
       mirrors:
+         - quay.io/redhat-user-workloads/ocp-bpfman-tenant/bpfman-agent-ystream
          - quay.io/redhat-user-workloads/ocp-bpfman-tenant/ocp-bpfman-agent
     - source: registry.redhat.io/bpfman/bpfman-operator-bundle
       mirrors:
+         - quay.io/redhat-user-workloads/ocp-bpfman-tenant/bpfman-operator-bundle-ystream
          - quay.io/redhat-user-workloads/ocp-bpfman-tenant/ocp-bpfman-operator-bundle
     - source: registry.redhat.io/bpfman/bpfman-rhel9-operator
       mirrors:
+         - quay.io/redhat-user-workloads/ocp-bpfman-tenant/bpfman-operator-ystream
          - quay.io/redhat-user-workloads/ocp-bpfman-tenant/ocp-bpfman-operator
     - source: registry.redhat.io/bpfman/bpfman
       mirrors:
+         - quay.io/redhat-user-workloads/ocp-bpfman-tenant/bpfman-daemon-ystream
          - quay.io/redhat-user-workloads/ocp-bpfman-tenant/ocp-bpfman
          
