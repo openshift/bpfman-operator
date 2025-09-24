@@ -1,0 +1,65 @@
+apiVersion: tekton.dev/v1
+kind: PipelineRun
+metadata:
+  annotations:
+    build.appstudio.openshift.io/build-nudge-files: ""
+    build.appstudio.openshift.io/repo: https://github.com/openshift/bpfman-operator?rev={{revision}}
+    build.appstudio.redhat.com/commit_sha: '{{revision}}'
+    build.appstudio.redhat.com/target_branch: '{{target_branch}}'
+    pipelinesascode.tekton.dev/max-keep-runs: "3"
+    pipelinesascode.tekton.dev/on-cel-expression: event == "push" && target_branch
+      == "main" && (".tekton/multi-arch-build-pipeline.yaml".pathChanged() || ".tekton/ocp-bpfman-operator-pull-request.yaml".pathChanged()
+      || ".tekton/ocp-bpfman-operator-push.yaml".pathChanged() || "apis/***".pathChanged()
+      || "controllers/***".pathChanged() || "cmd/***".pathChanged() || "Containerfile.bpfman-operator.openshift".pathChanged()
+      || "go.mod".pathChanged() || "go.sum".pathChanged() || "Makefile".pathChanged()
+      || "pkg/***".pathChanged() || "internal/***".pathChanged() || "test/***".pathChanged()
+      || "vendor/***".pathChanged() || "config/***".pathChanged() || "hack/openshift/***".pathChanged())
+  creationTimestamp: null
+  labels:
+    appstudio.openshift.io/application: bpfman-operator
+    appstudio.openshift.io/component: ocp-bpfman-operator
+    pipelines.appstudio.openshift.io/type: build
+  name: bpfman-operator-on-push
+  namespace: ocp-bpfman-tenant
+spec:
+  params:
+  - name: build-source-image
+    value: "true"
+  - name: git-url
+    value: '{{source_url}}'
+  - name: revision
+    value: '{{revision}}'
+  - name: output-image
+    value: quay.io/redhat-user-workloads/ocp-bpfman-tenant/ocp-bpfman-operator:{{revision}}
+  - name: dockerfile
+    value: Containerfile.bpfman-operator.openshift
+  - name: path-context
+    value: .
+  - name: build-platforms
+    value:
+    - localhost
+    - linux/arm64
+    - linux/ppc64le
+    - linux/s390x
+  - name: hermetic
+    value: "true"
+  pipelineRef:
+    name: build-pipeline
+  taskRunTemplate:
+    serviceAccountName: build-pipeline-ocp-bpfman-operator
+  workspaces:
+  - name: workspace
+    volumeClaimTemplate:
+      metadata:
+        creationTimestamp: null
+      spec:
+        accessModes:
+        - ReadWriteOnce
+        resources:
+          requests:
+            storage: 1Gi
+      status: {}
+  - name: git-auth
+    secret:
+      secretName: '{{ git_auth_secret }}'
+status: {}
