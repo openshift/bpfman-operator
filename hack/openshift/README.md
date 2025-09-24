@@ -46,6 +46,15 @@ Updates the catalog index to point to Red Hat images and sets timestamps.
   --operator-pullspec <operator-image>
 ```
 
+### `sync-version.sh`
+Synchronises the VERSION value from the repository root to all OpenShift-specific Containerfiles. The version information in OpenShift Containerfiles is stored as literal values in LABEL instructions (not dynamically read from the VERSION file), so this script updates those literal values to match the upstream VERSION.
+
+Run this after merging from upstream when the VERSION file changes:
+
+```bash
+make -C hack/openshift set-version
+```
+
 ### `Makefile`
 Test the transformations locally:
 - `transform-bundle` - Test bundle transformation
@@ -54,6 +63,7 @@ Test the transformations locally:
 - `transform-catalog` - Test catalog transformation
 - `transform-catalog-container` - Build catalog container with transformations
 - `transform-all-container` - Build all containers with transformations
+- `set-version` - Copy VERSION value and replace in OpenShift Containerfiles
 - `generate-rpm-lockfile` - Generate rpms.lock.yaml for Konflux builds
 - `format` - Format Python files with Black
 - `format-check` - Check Python formatting
