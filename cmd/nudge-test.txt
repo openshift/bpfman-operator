@@ -1,0 +1,9 @@
+# Nudge Test File
+
+This is a temporary file to test CEL expression triggers.
+It will trigger builds for components that monitor cmd/*** paths.
+
+This file can be safely deleted after testing.
+
+Test timestamp: 2025-09-24
+Purpose: Verify pipeline triggers after merge
