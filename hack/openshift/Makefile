@@ -8,6 +8,7 @@ help:
 	@echo "  transform-catalog            Update catalog index with Red Hat images"
 	@echo "  transform-catalog-container  Build catalog container with transformations"
 	@echo "  transform-all-container      Build all containers with transformations"
+	@echo "  set-version                  Copy VERSION value and replace in OpenShift Containerfiles"
 	@echo "  generate-rpm-lockfile        Generate rpms.lock.yaml for Konflux builds"
 	@echo "  format                       Format Python files with Black"
 	@echo "  format-check                 Check Python formatting"
@@ -57,4 +58,4 @@ format:
 format-check:
 	black --check *.py
 
-.PHONY: help transform-bundle transform-configmap transform-catalog transform-bundle-container transform-catalog-container transform-all-container generate-rpm-lockfile format format-check
+.PHONY: help transform-bundle transform-configmap transform-catalog transform-bundle-container transform-catalog-container transform-all-container set-version generate-rpm-lockfile format format-check
