@@ -14,7 +14,8 @@ metadata:
       || "controllers/***".pathChanged() || "cmd/***".pathChanged() || "Containerfile.bpfman-operator.openshift".pathChanged()
       || "go.mod".pathChanged() || "go.sum".pathChanged() || "Makefile".pathChanged()
       || "pkg/***".pathChanged() || "internal/***".pathChanged() || "test/***".pathChanged()
-      || "vendor/***".pathChanged() || "config/***".pathChanged() || "hack/openshift/***".pathChanged())
+      || "vendor/***".pathChanged() || "config/***".pathChanged() || "hack/openshift/***".pathChanged()
+      || "hack/konflux/images/bpfman.txt".pathChanged() || "hack/konflux/images/bpfman-agent.txt".pathChanged())
   creationTimestamp: null
   labels:
     appstudio.openshift.io/application: bpfman-ystream
