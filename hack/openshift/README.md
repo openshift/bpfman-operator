@@ -36,15 +36,6 @@ Replaces image references in the ConfigMap with Red Hat registry images.
   --bpfman-pullspec <daemon-image>
 ```
 
-### `update-catalog.sh`
-Updates the catalog index to point to Red Hat images and sets timestamps.
-
-```bash
-./hack/openshift/update-catalog.sh \
-  --index-file catalog/index.yaml \
-  --bundle-pullspec <bundle-image> \
-  --operator-pullspec <operator-image>
-```
 
 ### `sync-version.sh`
 Synchronises the VERSION value from the repository root to all OpenShift-specific Containerfiles. The version information in OpenShift Containerfiles is stored as literal values in LABEL instructions (not dynamically read from the VERSION file), so this script updates those literal values to match the upstream VERSION.
@@ -60,9 +51,6 @@ Test the transformations locally:
 - `transform-bundle` - Test bundle transformation
 - `transform-bundle-container` - Build bundle container with transformations
 - `transform-configmap` - Test ConfigMap transformation
-- `transform-catalog` - Test catalog transformation
-- `transform-catalog-container` - Build catalog container with transformations
-- `transform-all-container` - Build all containers with transformations
 - `set-version` - Copy VERSION value and replace in OpenShift Containerfiles
 - `generate-rpm-lockfile` - Generate rpms.lock.yaml for Konflux builds
 - `format` - Format Python files with Black
@@ -74,7 +62,6 @@ Test the transformations locally:
 Konflux updates these files in `konflux/images/` when new images are built:
 
 - `bpfman-operator.txt` - Operator image
-- `bpfman-operator-bundle.txt` - Bundle image
 - `bpfman-agent.txt` - Agent image
 - `bpfman.txt` - Daemon image
 
@@ -102,7 +89,6 @@ make
 # Run specific transformations
 make transform-bundle
 make transform-configmap
-make transform-catalog
 ```
 
 From the project root:
@@ -124,10 +110,4 @@ hack/openshift/update-configmap.py \
   --configmap-file bundle/manifests/bpfman-config_v1_configmap.yaml \
   --agent-pullspec "$(cat hack/openshift/konflux/images/bpfman-agent.txt)" \
   --bpfman-pullspec "$(cat hack/openshift/konflux/images/bpfman.txt)"
-
-# Catalog transformation
-hack/openshift/update-catalog.sh \
-  --index-file catalog/index.yaml \
-  --bundle-pullspec "$(cat hack/openshift/konflux/images/bpfman-operator-bundle.txt)" \
-  --operator-pullspec "$(cat hack/openshift/konflux/images/bpfman-operator.txt)"
 ```
