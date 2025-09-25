@@ -33,7 +33,6 @@ updates, related components must rebuild to maintain compatibility.
 - `bpfman.txt` - The bpfman daemon (Rust component) image reference
 - `bpfman-agent.txt` - The bpfman-agent (Go component) image reference
 - `bpfman-operator.txt` - The bpfman-operator (Go component) image reference
-- `bpfman-operator-bundle.txt` - The operator bundle image reference
 
 ## Build Dependencies and Nudge Relationships
 
@@ -74,14 +73,6 @@ updates, related components must rebuild to maintain compatibility.
          -e 's@bpfman\.agent\.image=.*@bpfman.agent.image=$(BPFMAN_AGENT_IMG)@'
   ```
 
-**operator-catalog** (triggered by: `bpfman-operator-bundle.txt`, `bpfman-operator.txt`)
-- **Purpose**: Creates an OLM catalog index for the operator
-- **Why it's triggered by these files**:
-  - When bundle changes → catalog rebuilds to include new bundle
-  - When operator changes → catalog rebuilds to update operator reference
-- **Transformations**:
-  - `update-catalog.sh` updates index.yaml with both references
-
 ## Complete Example Flow
 
 Let's trace what happens when the Rust daemon (bpfman) gets updated:
@@ -108,10 +99,7 @@ Let's trace what happens when the Rust daemon (bpfman) gets updated:
    - Runs `update-configmap.py` with new daemon and agent SHAs
    - ConfigMap now has matched daemon + agent versions
    - Produces new bundle → SHA: ghi789
-   - Konflux updates `bpfman-operator-bundle.txt`
-
-6. **Catalog rebuilds**
-   - `bpfman-operator-bundle.txt` changed → triggers catalog rebuild
+   - Note: Catalog updates are now managed separately in the bpfman-catalog repository
    - Catalog includes new bundle with updated ConfigMap
 
 **End result**: The operator can now deploy matched versions of the daemon

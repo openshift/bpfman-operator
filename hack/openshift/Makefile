@@ -24,21 +24,10 @@ transform-configmap:
 		--agent-pullspec "$$(cat ../konflux/images/bpfman-agent.txt)" \
 		--bpfman-pullspec "$$(cat ../konflux/images/bpfman.txt)"
 
-transform-catalog:
-	./update-catalog.sh \
-		--index-file ../../catalog/index.yaml \
-		--bundle-pullspec "$$(cat ../konflux/images/bpfman-operator-bundle.txt)" \
-		--operator-pullspec "$$(cat ../konflux/images/bpfman-operator.txt)"
-
 # Container-based transformation targets
 # Run these with: make -C hack/openshift/ transform-*-container
 transform-bundle-container:
 	podman build -f ../../Containerfile.bundle.openshift -t bpfman-operator-transform ../../
-
-transform-catalog-container:
-	podman build -f ../../Containerfile.catalog.openshift-4.20 -t bpfman-catalog ../../
-
-transform-all-container: transform-bundle-container transform-catalog-container
 
 # Sync VERSION from upstream to all OpenShift Containerfiles. Run this
 # after merging from upstream or when VERSION changes.
