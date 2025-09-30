@@ -5,3 +5,6 @@ Can be removed after testing is complete.
 
 Date: 2025-09-25
 Related: Component nudges-ref patched to fix build dependencies
+
+Update: 2025-09-30
+Testing catalog bundle reference updates to pick up latest builds
