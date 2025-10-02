@@ -54,12 +54,21 @@ def main():
         print(f"Error reading file {args.csv_file}: {e}", file=sys.stderr)
         sys.exit(1)
 
+    # IMPORTANT: Replacement order matters! More specific patterns should come before
+    # general ones to avoid conflicts. The script should be run on the original CSV
+    # file, not on previously transformed content.
     replacements = [
         ("quay.io/bpfman/bpfman-operator:latest", f'"{args.image_pullspec}"'),
         ("displayName: Bpfman Operator", "displayName: eBPF Manager Operator"),
         ("The bpfman Operator", "The eBPF manager Operator"),
         ("name: The bpfman Community", "name: Red Hat"),
         ("url: https://bpfman.io", "url: https://www.redhat.com"),
+        ("https://github.com/bpfman/bpfman", "https://github.com/openshift/bpfman-operator"),
+        ("https://github.com/bpfman/bpfman-operator", "https://github.com/openshift/bpfman-operator"),
+        ("https://bpfman.netlify.app/", "https://github.com/openshift/bpfman-operator"),
+        ("Support bpfman Community", "Support Red Hat"),
+        ("bpfman Community", "Red Hat"),
+        ("repository: https://github.com/bpfman/", "repository: https://github.com/openshift/bpfman-operator"),
     ]
 
     for old, new in replacements:
