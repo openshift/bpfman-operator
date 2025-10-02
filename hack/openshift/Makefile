@@ -14,11 +14,15 @@ help:
 	@echo "  format-check                 Check Python formatting"
 
 transform-bundle:
+	@echo "Restoring CSV file from git to ensure clean baseline..."
+	git checkout HEAD -- ../../bundle/manifests/bpfman-operator.clusterserviceversion.yaml
 	./update-bundle.py \
 		--csv-file ../../bundle/manifests/bpfman-operator.clusterserviceversion.yaml \
 		--image-pullspec "$$(cat ../konflux/images/bpfman-operator.txt)"
 
 transform-configmap:
+	@echo "Restoring ConfigMap file from git to ensure clean baseline..."
+	git checkout HEAD -- ../../bundle/manifests/bpfman-config_v1_configmap.yaml
 	./update-configmap.py \
 		--configmap-file ../../bundle/manifests/bpfman-config_v1_configmap.yaml \
 		--agent-pullspec "$$(cat ../konflux/images/bpfman-agent.txt)" \
