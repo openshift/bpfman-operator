@@ -12,10 +12,10 @@ When a component finishes building successfully, Konflux's nudging system can cr
 
 ```bash
 oc get component bpfman-agent-ystream -n ocp-bpfman-tenant -o jsonpath='{.spec.build-nudges-ref}'
-# Output: ["bpfman-operator-ystream"]
+# Output: ["bpfman-operator-bundle-ystream"]
 ```
 
-**What this means**: When `bpfman-agent-ystream` builds successfully, Konflux creates a PR in the `bpfman-operator-ystream` component's repository updating `hack/konflux/images/bpfman-agent.txt` with the new agent image digest.
+**What this means**: When `bpfman-agent-ystream` builds successfully, Konflux creates a PR in the `bpfman-operator-bundle-ystream` component's repository updating `hack/konflux/images/bpfman-agent.txt` with the new agent image digest.
 
 **Key point**: This mechanism only **creates PRs**. It does not trigger builds directly.
 
@@ -28,11 +28,10 @@ Pipeline definitions (`.tekton/*-push.yaml`) contain CEL expressions that watch 
 ```yaml
 pipelinesascode.tekton.dev/on-cel-expression: event == "push" && target_branch
   == "main" && (...
-  || "hack/konflux/images/bpfman.txt".pathChanged()
-  || "hack/konflux/images/bpfman-agent.txt".pathChanged())
+  || "hack/konflux/images/bpfman.txt".pathChanged())
 ```
 
-**What this means**: When a PR merges to `main` that changes either `bpfman.txt` or `bpfman-agent.txt`, the operator rebuilds automatically.
+**What this means**: When a PR merges to `main` that changes `bpfman.txt`, the operator rebuilds automatically.
 
 **Key point**: This mechanism only **triggers builds on file changes**. It does not create PRs.
 
@@ -42,14 +41,14 @@ pipelinesascode.tekton.dev/on-cel-expression: event == "push" && target_branch
 
 ```
 bpfman-daemon-ystream → bpfman-operator-ystream
-bpfman-agent-ystream → bpfman-operator-ystream
+bpfman-agent-ystream → bpfman-operator-bundle-ystream
 bpfman-operator-ystream → bpfman-operator-bundle-ystream
 ```
 
 This means:
 - Daemon builds → Creates PR updating `hack/konflux/images/bpfman.txt` in operator repo
-- Agent builds → Creates PR updating `hack/konflux/images/bpfman-agent.txt` in operator repo
-- Operator builds → Creates PR updating `hack/konflux/images/bpfman-operator.txt` in operator repo
+- Agent builds → Creates PR updating `hack/konflux/images/bpfman-agent.txt` in bundle repo
+- Operator builds → Creates PR updating `hack/konflux/images/bpfman-operator.txt` in bundle repo
 
 ### CEL Expression Watches (What Triggers Rebuilds on Merge)
 
@@ -59,12 +58,11 @@ This means:
 
 **bpfman-operator-ystream** watches:
 - `hack/konflux/images/bpfman.txt`
-- `hack/konflux/images/bpfman-agent.txt`
 - Code changes (`*.go`, `Containerfile.bpfman-operator.openshift`, etc.)
 
 **bpfman-operator-bundle-ystream** watches:
 - `hack/konflux/images/bpfman-operator.txt`
-- `hack/konflux/images/bpfman-agent.txt` (after PR #969)
+- `hack/konflux/images/bpfman-agent.txt`
 - Bundle manifests, configurations, etc.
 
 ## Image Reference Files
@@ -145,11 +143,11 @@ Notice the operator rebuilt twice:
 
 The second rebuild was unnecessary because the operator doesn't use `bpfman-agent.txt` at build time—only the bundle needs it for the ConfigMap.
 
-**Solution**: PR #969 changes the agent's `build-nudges-ref` to target the bundle directly instead of the operator, eliminating the redundant operator rebuild.
+**Solution**: The optimisation redirects agent nudges to target the bundle directly, bypassing unnecessary operator rebuilds whilst maintaining version coherence.
 
 ## Example: Agent-Only Update
 
-Let's trace what happens when only the agent code changes (after PR #969 merges):
+Let's trace what happens when only the agent code changes (current behaviour):
 
 ### Step 1: Code Changes Trigger Agent Build
 
@@ -163,7 +161,7 @@ Let's trace what happens when only the agent code changes (after PR #969 merges)
 **Agent build completes**:
 - New agent image: `abc123`
 - Nudging system creates **PR**: Updates `hack/konflux/images/bpfman-agent.txt`
-- PR targets: `bpfman-operator-bundle-ystream` (after PR #969 configuration change)
+- PR targets: `bpfman-operator-bundle-ystream`
 
 ### Step 3: PR Merges → Bundle Rebuilds
 
