@@ -14,31 +14,24 @@ help:
 	@echo "  format-check                 Check Python formatting"
 
 transform-bundle:
+	@echo "Restoring CSV file from git to ensure clean baseline..."
+	git checkout HEAD -- ../../bundle/manifests/bpfman-operator.clusterserviceversion.yaml
 	./update-bundle.py \
 		--csv-file ../../bundle/manifests/bpfman-operator.clusterserviceversion.yaml \
 		--image-pullspec "$$(cat ../konflux/images/bpfman-operator.txt)"
 
 transform-configmap:
+	@echo "Restoring ConfigMap file from git to ensure clean baseline..."
+	git checkout HEAD -- ../../bundle/manifests/bpfman-config_v1_configmap.yaml
 	./update-configmap.py \
 		--configmap-file ../../bundle/manifests/bpfman-config_v1_configmap.yaml \
 		--agent-pullspec "$$(cat ../konflux/images/bpfman-agent.txt)" \
 		--bpfman-pullspec "$$(cat ../konflux/images/bpfman.txt)"
 
-transform-catalog:
-	./update-catalog.sh \
-		--index-file ../../catalog/index.yaml \
-		--bundle-pullspec "$$(cat ../konflux/images/bpfman-operator-bundle.txt)" \
-		--operator-pullspec "$$(cat ../konflux/images/bpfman-operator.txt)"
-
 # Container-based transformation targets
 # Run these with: make -C hack/openshift/ transform-*-container
 transform-bundle-container:
 	podman build -f ../../Containerfile.bundle.openshift -t bpfman-operator-transform ../../
-
-transform-catalog-container:
-	podman build -f ../../Containerfile.catalog.openshift-4.20 -t bpfman-catalog ../../
-
-transform-all-container: transform-bundle-container transform-catalog-container
 
 # Sync VERSION from upstream to all OpenShift Containerfiles. Run this
 # after merging from upstream or when VERSION changes.

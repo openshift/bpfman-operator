@@ -1,0 +1,7 @@
+Test file to verify nudge cascade after component nudges-ref fixes.
+
+This file triggers operator and agent rebuilds when merged.
+Can be removed after testing is complete.
+
+Date: 2025-09-25
+Related: Component nudges-ref patched to fix build dependencies
