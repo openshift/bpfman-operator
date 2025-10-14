@@ -1,174 +1,191 @@
-# Konflux Image Nudge Files
+# Konflux Image Reference Files and Nudging
 
-This directory contains placeholder files that Konflux populates with image
-references during the build process. These files are used as "nudge files" to
-trigger rebuilds of dependent components when base images are updated.
+This directory contains image reference files that coordinate component rebuilds through Konflux's nudging system. Understanding how nudging works requires distinguishing between two complementary mechanisms that work together.
 
-## Understanding the Nudge System
+## Two Mechanisms Working Together
 
-The Konflux nudge system coordinates component rebuilds when dependencies
-change. The terminology can be confusing, so here's the actual flow:
+### 1. Nudging (Creates PRs via `build-nudges-ref`)
 
-1. **Component A builds** → produces new image with new SHA
-2. **Konflux raises a PR** → updates Component A's `.txt` file with the new SHA
-3. **PR merges** → the `.txt` file change triggers builds of components that
-   have `build.appstudio.openshift.io/build-nudge-files` watching that file
+When a component finishes building successfully, Konflux's nudging system can create pull requests that update image reference files in other components' repositories.
 
-The annotation `build.appstudio.openshift.io/build-nudge-files` means:
-**"When these files change (via PR merge), trigger a rebuild of THIS component"**
+**Configuration**: Set via the `build-nudges-ref` field on Konflux components:
 
-## The Problem We're Solving
+```bash
+oc get component bpfman-agent-ystream -n ocp-bpfman-tenant -o jsonpath='{.spec.build-nudges-ref}'
+# Output: ["bpfman-operator-ystream"]
+```
 
-The bpfman-operator manages multiple components that must work together:
-- **bpfman**: The Rust eBPF daemon
-- **bpfman-agent**: The Go-based Kubernetes agent
-- **bpfman-operator**: The operator that orchestrates them
+**What this means**: When `bpfman-agent-ystream` builds successfully, Konflux creates a PR in the `bpfman-operator-ystream` component's repository updating `hack/konflux/images/bpfman-agent.txt` with the new agent image digest.
 
-These components need version synchronisation. The operator deploys the agent
-and daemon using image references stored in a ConfigMap. When one component
-updates, related components must rebuild to maintain compatibility.
+**Key point**: This mechanism only **creates PRs**. It does not trigger builds directly.
+
+### 2. CEL Expressions (Trigger Builds on File Changes)
+
+Pipeline definitions (`.tekton/*-push.yaml`) contain CEL expressions that watch for file changes. When a PR merges and changes one of the watched files, PipelinesAsCode triggers a build.
+
+**Example from** `.tekton/bpfman-operator-ystream-push.yaml`:
+
+```yaml
+pipelinesascode.tekton.dev/on-cel-expression: event == "push" && target_branch
+  == "main" && (...
+  || "hack/konflux/images/bpfman.txt".pathChanged()
+  || "hack/konflux/images/bpfman-agent.txt".pathChanged())
+```
+
+**What this means**: When a PR merges to `main` that changes either `bpfman.txt` or `bpfman-agent.txt`, the operator rebuilds automatically.
+
+**Key point**: This mechanism only **triggers builds on file changes**. It does not create PRs.
+
+## Current Configuration
+
+### Nudging Relationships (Who Creates PRs for Whom)
+
+```
+bpfman-daemon-ystream → bpfman-operator-ystream
+bpfman-agent-ystream → bpfman-operator-ystream
+bpfman-operator-ystream → bpfman-operator-bundle-ystream
+```
+
+This means:
+- Daemon builds → Creates PR updating `hack/konflux/images/bpfman.txt` in operator repo
+- Agent builds → Creates PR updating `hack/konflux/images/bpfman-agent.txt` in operator repo
+- Operator builds → Creates PR updating `hack/konflux/images/bpfman-operator.txt` in operator repo
+
+### CEL Expression Watches (What Triggers Rebuilds on Merge)
+
+**bpfman-daemon-ystream**: No CEL watches (only rebuilt on code changes)
+
+**bpfman-agent-ystream**: No CEL watches (only rebuilt on code changes)
+
+**bpfman-operator-ystream** watches:
+- `hack/konflux/images/bpfman.txt`
+- `hack/konflux/images/bpfman-agent.txt`
+- Code changes (`*.go`, `Containerfile.bpfman-operator.openshift`, etc.)
+
+**bpfman-operator-bundle-ystream** watches:
+- `hack/konflux/images/bpfman-operator.txt`
+- `hack/konflux/images/bpfman-agent.txt` (after PR #969)
+- Bundle manifests, configurations, etc.
 
 ## Image Reference Files
 
-- `bpfman.txt` - The bpfman daemon (Rust component) image reference
-- `bpfman-agent.txt` - The bpfman-agent (Go component) image reference
-- `bpfman-operator.txt` - The bpfman-operator (Go component) image reference
+- `bpfman.txt` - The bpfman daemon (Rust component) image digest
+- `bpfman-agent.txt` - The bpfman-agent (Go component) image digest
+- `bpfman-operator.txt` - The bpfman-operator (Go component) image digest
 
-## Build Dependencies and Nudge Relationships
+These files are updated via PRs created by the nudging system and consumed during builds.
 
-### Why Each Component Rebuilds When It Does
+## How The Bundle Uses These Files
 
-**bpfman-agent** (triggered by: `bpfman.txt`)
-- **Not a build dependency!** The agent is built from source code, not from the bpfman image
-- **Why it's triggered by bpfman.txt**: Version synchronisation - when the Rust daemon
-  updates, the Go agent rebuilds to ensure they remain compatible
-- **Result**: The ConfigMap gets a matched set of daemon + agent versions
+The bundle build process reads these files to populate the operator's ConfigMap with pinned image digests:
 
-**bpfman-operator** (triggered by: nothing `""`)
-- **Built from source**: Only rebuilds on code changes
-- **Why no nudges**: The operator is the base component that deploys the others;
-  it doesn't need to rebuild when other images change
-- **Doesn't embed other images**: The operator reads the ConfigMap at runtime to
-  get daemon/agent image references - it doesn't need them at build time
-
-### Transformation Builds
-
-**operator-bundle** (triggered by: `bpfman-operator.txt`, `bpfman-agent.txt`, `bpfman.txt`)
-- **Purpose**: Packages the operator with a ConfigMap containing image references
-- **The ConfigMap is critical**: It tells the operator which daemon and agent
-  images to deploy at runtime
-- **Why it's triggered by all three images**:
-  - When operator changes → bundle rebuilds to update ClusterServiceVersion (CSV)
-  - When agent changes → bundle rebuilds to update ConfigMap
-  - When daemon changes → bundle rebuilds to update ConfigMap
-- **Transformations**:
-  - `update-bundle.py` updates ClusterServiceVersion (CSV) with operator image
-  - `update-configmap.py` updates ConfigMap with agent and daemon images
-- **Confirmed by Makefile**: The `bundle` target shows exactly this:
-  ```makefile
-  # Sets the operator image itself
-  $(KUSTOMIZE) edit set image quay.io/bpfman/bpfman-operator=${BPFMAN_OPERATOR_IMG}
-  # Updates ConfigMap with daemon and agent images
-  $(SED) -e 's@bpfman\.image=.*@bpfman.image=$(BPFMAN_IMG)@' \
-         -e 's@bpfman\.agent\.image=.*@bpfman.agent.image=$(BPFMAN_AGENT_IMG)@'
-  ```
-
-## Complete Example Flow
-
-Let's trace what happens when the Rust daemon (bpfman) gets updated:
-
-1. **bpfman daemon rebuilt** (e.g., feature of fix)
-   - Konflux builds new daemon image → SHA: abc123
-   - Konflux raises PR to update `bpfman.txt` with new SHA
-   - PR merges
-
-2. **File change triggers rebuilds**:
-   - `bpfman.txt` changed → triggers bpfman-agent rebuild (version sync)
-   - `bpfman.txt` changed → triggers bundle rebuild (ConfigMap update)
-
-3. **bpfman-agent rebuilds**
-   - Built from source (Go code)
-   - Produces new image → SHA: def456
-   - Konflux raises PR to update `bpfman-agent.txt`
-   - PR merges
-
-4. **More rebuilds triggered**:
-   - `bpfman-agent.txt` changed → triggers bundle rebuild again
-
-5. **Bundle rebuilds** (may have already started from step 2)
-   - Runs `update-configmap.py` with new daemon and agent SHAs
-   - ConfigMap now has matched daemon + agent versions
-   - Produces new bundle → SHA: ghi789
-   - Note: Catalog updates are now managed separately in the bpfman-catalog repository
-   - Catalog includes new bundle with updated ConfigMap
-
-**End result**: The operator can now deploy matched versions of the daemon
-and agent that are guaranteed to be compatible.
-
-## Managing Component Transitions
-
-When transitioning between component versions or naming conventions, you may need
-to disable older components to prevent unnecessary builds and PR generation.
-
-### Legacy Components (ocp-*)
-
-The following legacy components are being replaced by y-stream equivalents:
-
-**In bpfman repository:**
-- `ocp-bpfman` → replaced by `bpfman-daemon-ystream`
-
-**In bpfman-operator repository:**
-- `ocp-bpfman-agent` → replaced by `bpfman-agent-ystream`
-- `ocp-bpfman-operator` → replaced by `bpfman-operator-ystream`
-- `ocp-bpfman-operator-bundle` → replaced by `bpfman-operator-bundle-ystream`
-- `ocp-bpfman-operator-catalog` → catalog components remain separate per OCP version
-- `ocp-bpfman-operator-catalog-ocp4-18`
-- `ocp-bpfman-operator-catalog-ocp4-19`
-- `ocp-bpfman-operator-catalog-ocp4-20`
-
-### Y-Stream Components
-
-The y-stream components follow the naming pattern `<component>-ystream` and provide:
-- Consistent versioning across related components
-- Better alignment with downstream release processes
-- Simplified pipeline configurations using shared defaults
-
-Current y-stream components:
-- `bpfman-daemon-ystream` (built from bpfman repository)
-- `bpfman-agent-ystream` (built from bpfman-operator repository)
-- `bpfman-operator-ystream` (built from bpfman-operator repository)
-- `bpfman-operator-bundle-ystream` (built from bpfman-operator repository)
-
-### Disabling/Enabling Components
-
-To stop Mintmaker from opening PRs for a component (effectively freezing it),
-use the `mintmaker.appstudio.redhat.com/disabled` annotation.
-
-**Important**: The mintmaker annotation only prevents Mintmaker from creating
-update PRs. It does NOT prevent PipelinesAsCode from triggering builds when
-code changes are pushed. To fully disable a component's pipelines, you must
-also set the CEL expression to `"false"` in the `.tekton/*.yaml` files.
-
-#### Disable legacy components:
 ```bash
-# Disable ocp-* components in bpfman
-oc -n ocp-bpfman-tenant annotate component/ocp-bpfman mintmaker.appstudio.redhat.com/disabled=true
-
-# Disable ocp-* components in bpfman-operator
-oc -n ocp-bpfman-tenant annotate component/ocp-bpfman-agent mintmaker.appstudio.redhat.com/disabled=true
-oc -n ocp-bpfman-tenant annotate component/ocp-bpfman-operator mintmaker.appstudio.redhat.com/disabled=true
-oc -n ocp-bpfman-tenant annotate component/ocp-bpfman-operator-bundle mintmaker.appstudio.redhat.com/disabled=true
-oc -n ocp-bpfman-tenant annotate component/ocp-bpfman-operator-catalog mintmaker.appstudio.redhat.com/disabled=true
-oc -n ocp-bpfman-tenant annotate component/ocp-bpfman-operator-catalog-ocp4-18 mintmaker.appstudio.redhat.com/disabled=true
-oc -n ocp-bpfman-tenant annotate component/ocp-bpfman-operator-catalog-ocp4-19 mintmaker.appstudio.redhat.com/disabled=true
-oc -n ocp-bpfman-tenant annotate component/ocp-bpfman-operator-catalog-ocp4-20 mintmaker.appstudio.redhat.com/disabled=true
+# In hack/openshift/update-configmap.py
+configmap["data"]["bpfman.agent.image"] = agent_pullspec  # from bpfman-agent.txt
+configmap["data"]["bpfman.image"] = bpfman_pullspec      # from bpfman.txt
 ```
 
-#### Re-enable components (if needed):
-To re-enable a component, use the same command with a `-` after `disabled`:
-```bash
-oc -n ocp-bpfman-tenant annotate component/ocp-bpfman mintmaker.appstudio.redhat.com/disabled-
-```
+The operator reads these values from the ConfigMap at runtime (see `controllers/bpfman-operator/configmap.go:368,389`) to deploy the daemon and agent with the correct image references.
 
-**Note**: This approach is based on the pattern documented by the
-[NetObserv team](https://github.com/netobserv/network-observability-operator/blob/main/docs/Konflux.md#freezing-zstream).
+**Critical insight**: The operator binary does not embed these image references at build time. It reads them from the ConfigMap at runtime. This is why agent/daemon updates don't require operator rebuilds—only bundle rebuilds to update the ConfigMap.
+
+## Complete Example: Base Image Update
+
+Let's trace what happens when PR #964 merged, updating the go-toolset base image in both operator and agent Containerfiles:
+
+### Step 1: Code Changes Trigger Parallel Rebuilds (CEL Expressions)
+
+**Event**: PR merges changing `Containerfile.bpfman-operator.openshift` and `Containerfile.bpfman-agent.openshift`
+
+**Automatic rebuilds** (via CEL expressions watching Containerfiles):
+- `bpfman-operator-ystream-on-push-4nqjg` starts (08:58:10Z)
+- `bpfman-agent-ystream-on-push-nnn8j` starts (08:58:12Z)
+
+**No PRs created yet**—these are CEL-triggered builds from code changes.
+
+### Step 2: Builds Complete → Nudging Creates PRs
+
+**Agent build completes** (09:08:00Z):
+- New agent image: `5137106`
+- Nudging system creates **PR #967**: Updates `hack/konflux/images/bpfman-agent.txt`
+- PR targets: `bpfman-operator-ystream` (via `build-nudges-ref`)
+
+**Operator build completes** (09:08:00Z):
+- New operator image: `f7b1350`
+- Nudging system creates **PR #966**: Updates `hack/konflux/images/bpfman-operator.txt`
+- PR targets: `bpfman-operator-bundle-ystream` (via `build-nudges-ref`)
+
+### Step 3: PRs Merge → CEL Expressions Trigger Rebuilds
+
+**PR #966 merges** (09:15:03Z):
+- File changed: `hack/konflux/images/bpfman-operator.txt`
+- Bundle CEL expression sees the change
+- **Bundle rebuilds** (09:15:25Z) with operator `f7b1350`
+
+**PR #967 merges** (09:17:51Z):
+- File changed: `hack/konflux/images/bpfman-agent.txt`
+- Operator CEL expression sees the change
+- **Operator rebuilds** (09:18:11Z) with agent `5137106`
+
+### Step 4: Cascade Continues
+
+**Second operator build completes** (09:27:00Z):
+- New operator image: `4c6d667` (now includes agent `5137106`)
+- Nudging system creates **PR #968**: Updates `hack/konflux/images/bpfman-operator.txt`
+- PR targets: `bpfman-operator-bundle-ystream`
+
+**PR #968 merges**:
+- Bundle rebuilds with operator `4c6d667`
+
+### The Inefficiency
+
+Notice the operator rebuilt twice:
+1. From the original Containerfile change (step 1)
+2. From the agent nudge PR merge (step 3)
+
+The second rebuild was unnecessary because the operator doesn't use `bpfman-agent.txt` at build time—only the bundle needs it for the ConfigMap.
+
+**Solution**: PR #969 changes the agent's `build-nudges-ref` to target the bundle directly instead of the operator, eliminating the redundant operator rebuild.
+
+## Example: Agent-Only Update
+
+Let's trace what happens when only the agent code changes (after PR #969 merges):
+
+### Step 1: Code Changes Trigger Agent Build
+
+**Event**: PR merges changing agent code (not operator code)
+
+**Automatic rebuild** (via CEL expression):
+- `bpfman-agent-ystream-on-push-xxxxx` starts
+
+### Step 2: Agent Build Completes → Nudging Creates PR
+
+**Agent build completes**:
+- New agent image: `abc123`
+- Nudging system creates **PR**: Updates `hack/konflux/images/bpfman-agent.txt`
+- PR targets: `bpfman-operator-bundle-ystream` (after PR #969 configuration change)
+
+### Step 3: PR Merges → Bundle Rebuilds
+
+**PR merges**:
+- File changed: `hack/konflux/images/bpfman-agent.txt`
+- Bundle CEL expression sees the change
+- **Bundle rebuilds** with new agent image in ConfigMap
+
+**Result**: Agent update causes exactly one bundle rebuild. Operator does not rebuild.
+
+## Viewing Current Configuration
+
+```bash
+# Show all nudge relationships
+oc get components -n ocp-bpfman-tenant -o json | \
+  jq -r '.items[] | select(.spec["build-nudges-ref"]) |
+  "\(.metadata.name) → \(.spec["build-nudges-ref"] | join(", "))"'
+
+# Check a specific component's nudge targets
+oc get component bpfman-agent-ystream -n ocp-bpfman-tenant \
+  -o jsonpath='{.spec.build-nudges-ref}'
+
+# See CEL expressions in pipeline definitions
+grep -A 5 "on-cel-expression" .tekton/*-push.yaml
+```
