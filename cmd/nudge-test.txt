@@ -5,5 +5,5 @@ It will trigger builds for components that monitor cmd/*** paths.
 
 This file can be safely deleted after testing.
 
-Test timestamp: 2025-09-24
-Purpose: Verify pipeline triggers after merge
+Test timestamp: 2025-10-14
+Purpose: Verify agent nudges bundle directly after PR #969
