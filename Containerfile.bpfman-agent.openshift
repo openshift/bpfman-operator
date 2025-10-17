@@ -1,7 +1,10 @@
+ARG BUILDVERSION
+
 # Build the manager binary
 ARG BUILDPLATFORM
 
 FROM --platform=$BUILDPLATFORM registry.access.redhat.com/ubi9/go-toolset:9.6-1760420453 AS bpfman-agent-build
+ARG BUILDVERSION
 
 # The following ARGs are set internally by docker/build-push-action in github actions
 ARG TARGETOS
@@ -30,6 +33,7 @@ RUN CGO_ENABLED=1 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -tags st
 
 FROM --platform=$TARGETPLATFORM registry.access.redhat.com/ubi9/ubi-minimal:9.6-1760515502
 
+ARG BUILDVERSION
 ARG TARGETARCH
 ARG TARGETPLATFORM
 
@@ -47,7 +51,7 @@ LABEL name="bpfman/bpfman-agent" \
       description="The bpfman-agent manage bpfman ebpf programs on every node." \
       io.k8s.description="The bpfman-agent manage bpfman programs on every node. ." \
       io.openshift.tags="bpfman-agent" \
-      version="0.5.7-dev" \
+      version=$BUILDVERSION \
       vendor="Red Hat, Inc."
 
 ENTRYPOINT ["/bpfman-agent"]

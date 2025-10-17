@@ -34,6 +34,8 @@ spec:
     value: 5d
   - name: dockerfile
     value: Containerfile.bpfman-operator.openshift
+  - name: build-args-file
+    value: OPENSHIFT-VERSION
   pipelineRef:
     name: build-pipeline
   taskRunTemplate:

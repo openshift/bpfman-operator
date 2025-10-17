@@ -37,21 +37,23 @@ Replaces image references in the ConfigMap with Red Hat registry images.
 ```
 
 
-### `sync-version.sh`
-Synchronises the VERSION value from the repository root to all OpenShift-specific Containerfiles. The version information in OpenShift Containerfiles is stored as literal values in LABEL instructions (not dynamically read from the VERSION file), so this script updates those literal values to match the upstream VERSION.
-
-Run this after merging from upstream when the VERSION file changes:
+### `OPENSHIFT-VERSION`
+Contains the version number used for OpenShift builds. All OpenShift-specific Containerfiles use this value via a build argument (`BUILDVERSION`). Update this file when preparing a new release:
 
 ```bash
-make -C hack/openshift set-version
+echo "BUILDVERSION=0.5.7" > OPENSHIFT-VERSION
 ```
+
+The Containerfiles read this at build time using `--build-arg-file OPENSHIFT-VERSION`.
 
 ### `Makefile`
 Test the transformations locally:
 - `transform-bundle` - Test bundle transformation
 - `transform-bundle-container` - Build bundle container with transformations
 - `transform-configmap` - Test ConfigMap transformation
-- `set-version` - Copy VERSION value and replace in OpenShift Containerfiles
+- `transform-catalog` - Test catalog transformation
+- `transform-catalog-container` - Build catalog container with transformations
+- `transform-all-container` - Build all containers with transformations
 - `generate-rpm-lockfile` - Generate rpms.lock.yaml for Konflux builds
 - `format` - Format Python files with Black
 - `format-check` - Check Python formatting
