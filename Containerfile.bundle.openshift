@@ -75,7 +75,6 @@ LABEL name="bpfman-operator" \
       io.k8s.description="The bpfman-operator manage bpfman programs on every node. ." \
       io.openshift.tags="bpfman-operator" \
       version="0.5.7-dev" \
-      release="0.5.7-dev" \
       url="https://github.com/openshift/bpfman-operator" \
       vendor="Red Hat, Inc." \
       summary="Bpfman Operator"
