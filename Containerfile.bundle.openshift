@@ -1,3 +1,5 @@
+ARG BUILDVERSION
+
 # Red Hat rebranding tool for bpfman-operator OpenShift bundle
 #
 # This Containerfile takes upstream bpfman-operator bundles and
@@ -15,6 +17,7 @@
 
 ARG PYTHON_BUILDER_IMAGE_REF=registry.access.redhat.com/ubi9/python-312
 FROM ${PYTHON_BUILDER_IMAGE_REF} AS builder
+ARG BUILDVERSION
 
 WORKDIR /usr/src/bundle-transform
 
@@ -52,6 +55,8 @@ RUN echo "=== ConfigMap transformation changes ===" && \
 
 FROM scratch
 
+ARG BUILDVERSION
+
 # Core bundle labels.
 LABEL operators.operatorframework.io.bundle.mediatype.v1=registry+v1
 LABEL operators.operatorframework.io.bundle.manifests.v1=manifests/
@@ -74,7 +79,7 @@ LABEL name="bpfman-operator" \
       distribution-scope=public \
       io.k8s.description="The bpfman-operator manage bpfman programs on every node. ." \
       io.openshift.tags="bpfman-operator" \
-      version="0.5.7-dev" \
+      version=$BUILDVERSION \
       url="https://github.com/openshift/bpfman-operator" \
       vendor="Red Hat, Inc." \
       summary="Bpfman Operator"

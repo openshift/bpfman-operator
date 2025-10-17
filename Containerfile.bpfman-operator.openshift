@@ -1,8 +1,11 @@
+ARG BUILDVERSION
+
 # Build the manager binary
 ARG BUILDPLATFORM
 
 FROM --platform=$BUILDPLATFORM registry.access.redhat.com/ubi9/go-toolset:9.6-1760420453 AS bpfman-operator-build
 
+ARG BUILDVERSION
 ARG BUILDPLATFORM
 
 # The following ARGs are set internally by docker/build-push-action in github actions
@@ -27,6 +30,7 @@ RUN CGO_ENABLED=1 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -tags st
 
 FROM --platform=$TARGETPLATFORM registry.access.redhat.com/ubi9/ubi-minimal:9.6-1760515502
 
+ARG BUILDVERSION
 # The following ARGs are set internally by docker or podman on multiarch builds
 ARG TARGETPLATFORM
 
@@ -45,7 +49,7 @@ LABEL name="bpfman/bpfman-operator" \
       description="The bpfman-operator repository exists to deploy and manage bpfman within a Kubernetes cluster." \
       io.k8s.description="The bpfman-operator repository exists to deploy and manage bpfman within a Kubernetes cluster. ." \
       io.openshift.tags="bpfman-operator" \
-      version="0.5.7-dev" \
+      version=$BUILDVERSION \
       vendor="Red Hat, Inc."
 
 USER 65532:65532
