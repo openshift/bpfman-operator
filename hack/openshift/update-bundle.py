@@ -22,6 +22,9 @@ def main():
     parser.add_argument(
         "--image-pullspec", required=True, help="Operator image pullspec"
     )
+    parser.add_argument(
+        "--version", help="Version to set in CSV spec.version field"
+    )
     parser.add_argument("--output", help="Output file (defaults to input file)")
     parser.add_argument(
         "files",
@@ -131,6 +134,12 @@ def main():
     bpfman_operator_csv["metadata"]["annotations"][
         "features.operators.openshift.io/token-auth-gcp"
     ] = "false"
+
+    # Update version if provided
+    if args.version:
+        if "spec" not in bpfman_operator_csv:
+            bpfman_operator_csv["spec"] = {}
+        bpfman_operator_csv["spec"]["version"] = args.version.strip()
 
     try:
         if args.output == "-":

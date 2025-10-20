@@ -40,7 +40,8 @@ RUN cp /manifests/bpfman-config_v1_configmap.yaml /tmp/bpfman-config_v1_configma
 
 RUN hack/openshift/update-bundle.py \
     --csv-file /manifests/bpfman-operator.clusterserviceversion.yaml \
-    --image-pullspec "$(cat hack/konflux/images/bpfman-operator.txt)"
+    --image-pullspec "$(cat hack/konflux/images/bpfman-operator.txt)" \
+    --version "${BUILDVERSION}"
 
 RUN hack/openshift/update-configmap.py \
     --configmap-file /manifests/bpfman-config_v1_configmap.yaml \
