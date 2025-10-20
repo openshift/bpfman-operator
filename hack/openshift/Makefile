@@ -5,9 +5,6 @@ help:
 	@echo "  transform-bundle             Transform bundle CSV with Red Hat images"
 	@echo "  transform-bundle-container   Build bundle container with transformations"
 	@echo "  transform-configmap          Update ConfigMap with Red Hat images"
-	@echo "  transform-catalog            Update catalog index with Red Hat images"
-	@echo "  transform-catalog-container  Build catalog container with transformations"
-	@echo "  transform-all-container      Build all containers with transformations"
 	@echo "  generate-rpm-lockfile        Generate rpms.lock.yaml for Konflux builds"
 	@echo "  format                       Format Python files with Black"
 	@echo "  format-check                 Check Python formatting"
@@ -32,11 +29,6 @@ transform-configmap:
 transform-bundle-container:
 	podman build --build-arg-file ../../OPENSHIFT-VERSION -f ../../Containerfile.bundle.openshift -t bpfman-operator-transform ../../
 
-transform-catalog-container:
-	podman build -f ../../Containerfile.catalog.openshift-4.20 -t bpfman-catalog ../../
-
-transform-all-container: transform-bundle-container transform-catalog-container
-
 # Generate RPM lockfile for Konflux builds
 generate-rpm-lockfile:
 	cd ../.. && hack/openshift/generate-rpm-lockfile.sh
@@ -49,4 +41,4 @@ format:
 format-check:
 	black --check *.py
 
-.PHONY: help transform-bundle transform-configmap transform-catalog transform-bundle-container transform-catalog-container transform-all-container generate-rpm-lockfile format format-check
+.PHONY: help transform-bundle transform-configmap transform-bundle-container generate-rpm-lockfile format format-check
