@@ -137,9 +137,12 @@ def main():
 
     # Update version if provided
     if args.version:
+        version = args.version.strip()
         if "spec" not in bpfman_operator_csv:
             bpfman_operator_csv["spec"] = {}
-        bpfman_operator_csv["spec"]["version"] = args.version.strip()
+        bpfman_operator_csv["spec"]["version"] = version
+        # Update metadata.name to match version (pattern: bpfman-operator.v<version>)
+        bpfman_operator_csv["metadata"]["name"] = f"bpfman-operator.v{version}"
 
     try:
         if args.output == "-":
