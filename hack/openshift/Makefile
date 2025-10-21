@@ -14,7 +14,8 @@ transform-bundle:
 	git checkout HEAD -- ../../bundle/manifests/bpfman-operator.clusterserviceversion.yaml
 	./update-bundle.py \
 		--csv-file ../../bundle/manifests/bpfman-operator.clusterserviceversion.yaml \
-		--image-pullspec "$$(cat ../konflux/images/bpfman-operator.txt)"
+		--image-pullspec "$$(cat ../konflux/images/bpfman-operator.txt)" \
+		--version "$$(grep BUILDVERSION ../../OPENSHIFT-VERSION | cut -d= -f2)"
 
 transform-configmap:
 	@echo "Restoring ConfigMap file from git to ensure clean baseline..."

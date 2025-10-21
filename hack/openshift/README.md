@@ -23,7 +23,8 @@ Changes the ClusterServiceVersion file to use Red Hat images and adds OpenShift 
 ```bash
 ./hack/openshift/update-bundle.py \
   --csv-file bundle/manifests/bpfman-operator.clusterserviceversion.yaml \
-  --image-pullspec <operator-image>
+  --image-pullspec <operator-image> \
+  --version <version>
 ```
 
 ### `update-configmap.py`
@@ -38,13 +39,13 @@ Replaces image references in the ConfigMap with Red Hat registry images.
 
 
 ### `OPENSHIFT-VERSION`
-Contains the version number used for OpenShift builds. All OpenShift-specific Containerfiles use this value via a build argument (`BUILDVERSION`). Update this file when preparing a new release:
+Contains the version number used for OpenShift builds. All OpenShift-specific Containerfiles use this value via a build argument (`BUILDVERSION`), and `update-bundle.py` uses it to set the CSV version field. Update this file when preparing a new release:
 
 ```bash
 echo "BUILDVERSION=0.5.7" > OPENSHIFT-VERSION
 ```
 
-The Containerfiles read this at build time using `--build-arg-file OPENSHIFT-VERSION`.
+The Containerfiles read this at build time using `--build-arg-file OPENSHIFT-VERSION`, and the transformation scripts extract the version to update bundle metadata.
 
 ### `Makefile`
 Test the transformations locally:
@@ -102,7 +103,8 @@ Or run the scripts directly:
 # Bundle transformation
 hack/openshift/update-bundle.py \
   --csv-file bundle/manifests/bpfman-operator.clusterserviceversion.yaml \
-  --image-pullspec "$(cat hack/openshift/konflux/images/bpfman-operator.txt)"
+  --image-pullspec "$(cat hack/openshift/konflux/images/bpfman-operator.txt)" \
+  --version "$(grep BUILDVERSION OPENSHIFT-VERSION | cut -d= -f2)"
 
 # ConfigMap transformation
 hack/openshift/update-configmap.py \
