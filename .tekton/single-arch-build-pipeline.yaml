@@ -3,6 +3,65 @@ kind: Pipeline
 metadata:
   name: single-arch-build-pipeline
 spec:
+  params:
+  - name: git-url
+    description: Source Repository URL
+    type: string
+  - name: revision
+    description: Revision of the Source Repository
+    type: string
+    default: ""
+  - name: output-image
+    description: Fully Qualified Output Image
+    type: string
+  - name: path-context
+    description: Path to the source code of an application's component from where to build image
+    type: string
+    default: .
+  - name: dockerfile
+    description: Path to the Dockerfile inside the context specified by parameter path-context
+    type: string
+    default: Dockerfile
+  - name: rebuild
+    description: Force rebuild image
+    type: string
+    default: "false"
+  - name: skip-checks
+    description: Skip checks against built image
+    type: string
+    default: "false"
+  - name: hermetic
+    description: Execute the build with network isolation
+    type: string
+    default: "false"
+  - name: prefetch-input
+    description: Build dependencies to be prefetched by Cachi2
+    type: string
+    default: ""
+  - name: image-expires-after
+    description: Image tag expiration time, time values could be something like 1h, 2d, 3w for hours, days, and weeks, respectively
+    type: string
+    default: ""
+  - name: build-source-image
+    description: Build a source image
+    type: string
+    default: "false"
+  - name: prefetch-dev-package-managers-enabled
+    description: Enable development package managers for prefetch
+    type: string
+    default: "false"
+  - name: buildah-format
+    description: The format of the built container, oci or docker
+    type: string
+    default: "oci"
+  - name: build-args
+    description: Array of --build-arg values ("arg=value" strings) for buildah
+    type: array
+    default: []
+  - name: build-args-file
+    description: Path to a file with build arguments for buildah, see https://www.mankier.com/1/buildah-build#--build-arg-file
+    type: string
+    default: ""
   tasks:
   - name: init
     taskRef:
@@ -119,6 +178,11 @@ spec:
       - vcs-url=$(tasks.clone-repository.results.url)
     - name: BUILDAH_FORMAT
       value: $(params.buildah-format)
+    - name: BUILD_ARGS
+      value:
+      - $(params.build-args[*])
+    - name: BUILD_ARGS_FILE
+      value: $(params.build-args-file)
   - name: build-source-image
     taskRef:
       resolver: bundles
