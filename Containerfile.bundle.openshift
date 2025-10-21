@@ -34,6 +34,7 @@ COPY --chown=default hack/konflux/ ./hack/konflux/
 COPY --chown=default bundle/manifests /manifests/
 COPY --chown=default bundle/metadata /metadata/
 COPY --chown=default bundle/tests/scorecard /tests/scorecard/
+COPY --chown=default VERSION /VERSION
 
 RUN cp /manifests/bpfman-operator.clusterserviceversion.yaml /tmp/bpfman-operator.clusterserviceversion.yaml.orig
 RUN cp /manifests/bpfman-config_v1_configmap.yaml /tmp/bpfman-config_v1_configmap.yaml.orig
@@ -53,6 +54,18 @@ RUN echo "=== CSV transformation changes ===" && \
 
 RUN echo "=== ConfigMap transformation changes ===" && \
     diff -u /tmp/bpfman-config_v1_configmap.yaml.orig /manifests/bpfman-config_v1_configmap.yaml || true
+
+# Verify that the upstream version has been replaced
+RUN echo "=== Verifying upstream version replacement ===" && \
+    UPSTREAM_VERSION=$(cat /VERSION | tr -d '\n') && \
+    echo "Checking that upstream version '${UPSTREAM_VERSION}' is not present in transformed CSV..." && \
+    if grep -q "${UPSTREAM_VERSION}" /manifests/bpfman-operator.clusterserviceversion.yaml; then \
+        echo "ERROR: Found upstream version '${UPSTREAM_VERSION}' in transformed CSV:" && \
+        grep -n "${UPSTREAM_VERSION}" /manifests/bpfman-operator.clusterserviceversion.yaml && \
+        exit 1; \
+    else \
+        echo "SUCCESS: No upstream version strings found in CSV"; \
+    fi
 
 FROM scratch
 
