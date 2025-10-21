@@ -51,9 +51,6 @@ Test the transformations locally:
 - `transform-bundle` - Test bundle transformation
 - `transform-bundle-container` - Build bundle container with transformations
 - `transform-configmap` - Test ConfigMap transformation
-- `transform-catalog` - Test catalog transformation
-- `transform-catalog-container` - Build catalog container with transformations
-- `transform-all-container` - Build all containers with transformations
 - `generate-rpm-lockfile` - Generate rpms.lock.yaml for Konflux builds
 - `format` - Format Python files with Black
 - `format-check` - Check Python formatting
