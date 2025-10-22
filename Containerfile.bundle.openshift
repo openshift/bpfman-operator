@@ -55,16 +55,22 @@ RUN echo "=== CSV transformation changes ===" && \
 RUN echo "=== ConfigMap transformation changes ===" && \
     diff -u /tmp/bpfman-config_v1_configmap.yaml.orig /manifests/bpfman-config_v1_configmap.yaml || true
 
-# Verify that the upstream version has been replaced
-RUN echo "=== Verifying upstream version replacement ===" && \
+# Verify that the transformation applied correctly
+RUN echo "=== Verifying bundle transformation ===" && \
     UPSTREAM_VERSION=$(cat /VERSION | tr -d '\n') && \
-    echo "Checking that upstream version '${UPSTREAM_VERSION}' is not present in transformed CSV..." && \
-    if grep -q "${UPSTREAM_VERSION}" /manifests/bpfman-operator.clusterserviceversion.yaml; then \
-        echo "ERROR: Found upstream version '${UPSTREAM_VERSION}' in transformed CSV:" && \
-        grep -n "${UPSTREAM_VERSION}" /manifests/bpfman-operator.clusterserviceversion.yaml && \
-        exit 1; \
+    echo "Upstream version (VERSION): ${UPSTREAM_VERSION}" && \
+    echo "Downstream version (BUILDVERSION): ${BUILDVERSION}" && \
+    if [ "${UPSTREAM_VERSION}" != "${BUILDVERSION}" ]; then \
+        echo "Versions differ, verifying transformation applied..." && \
+        if ! grep -q "${BUILDVERSION}" /manifests/bpfman-operator.clusterserviceversion.yaml; then \
+            echo "ERROR: Downstream version '${BUILDVERSION}' not found in transformed CSV" && \
+            echo "This suggests the transformation did not apply correctly." && \
+            exit 1; \
+        else \
+            echo "SUCCESS: Downstream version '${BUILDVERSION}' found in CSV"; \
+        fi \
     else \
-        echo "SUCCESS: No upstream version strings found in CSV"; \
+        echo "Versions are the same, building upstream bundle as-is (no transformation needed)"; \
     fi
 
 FROM scratch
