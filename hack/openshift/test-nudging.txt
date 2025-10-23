@@ -6,4 +6,4 @@ pipeline due to the CEL expression path condition: "hack/openshift/***".pathChan
 This ensures that PR #1036's changes to the Tekton pipeline CEL expressions didn't
 break the nudging mechanism for bundle builds.
 
-Test timestamp: 2025-10-23T20:05:00Z
+Test timestamp: 2025-10-23T22:55:00Z
