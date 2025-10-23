@@ -12,7 +12,8 @@ metadata:
       == "release-4.20" && (".tekton/single-arch-build-pipeline.yaml".pathChanged() || ".tekton/bpfman-operator-bundle-zstream-pull-request.yaml".pathChanged()
       || ".tekton/bpfman-operator-bundle-zstream-push.yaml".pathChanged() || "Containerfile.bundle.openshift".pathChanged()
       || "bundle/***".pathChanged() || "hack/openshift/***".pathChanged() || "config/***".pathChanged()
-      || "rpms.in.yaml".pathChanged() || "requirements.txt".pathChanged() || "OPENSHIFT-VERSION".pathChanged())
+      || "rpms.in.yaml".pathChanged() || "requirements.txt".pathChanged() || "hack/konflux/images/bpfman-operator.txt".pathChanged()
+      || "hack/konflux/images/bpfman-agent.txt".pathChanged() || "OPENSHIFT-VERSION".pathChanged())
   creationTimestamp: null
   labels:
     appstudio.openshift.io/application: bpfman-zstream
