@@ -2,6 +2,7 @@ apiVersion: tekton.dev/v1
 kind: PipelineRun
 metadata:
   annotations:
+    build.appstudio.openshift.io/build-nudge-files: hack/konflux/images/bpfman-operator.txt,hack/konflux/images/bpfman-agent.txt,hack/konflux/images/bpfman.txt
     build.appstudio.openshift.io/repo: https://github.com/openshift/bpfman-operator?rev={{revision}}
     build.appstudio.redhat.com/commit_sha: '{{revision}}'
     build.appstudio.redhat.com/target_branch: '{{target_branch}}'
@@ -11,8 +12,7 @@ metadata:
       == "release-4.20" && (".tekton/single-arch-build-pipeline.yaml".pathChanged() || ".tekton/bpfman-operator-bundle-zstream-pull-request.yaml".pathChanged()
       || ".tekton/bpfman-operator-bundle-zstream-push.yaml".pathChanged() || "Containerfile.bundle.openshift".pathChanged()
       || "bundle/***".pathChanged() || "hack/openshift/***".pathChanged() || "config/***".pathChanged()
-      || "rpms.in.yaml".pathChanged() || "requirements.txt".pathChanged() || "hack/konflux/images/bpfman-operator.txt".pathChanged()
-      || "hack/konflux/images/bpfman-agent.txt".pathChanged() || "OPENSHIFT-VERSION".pathChanged())
+      || "rpms.in.yaml".pathChanged() || "requirements.txt".pathChanged() || "OPENSHIFT-VERSION".pathChanged())
   creationTimestamp: null
   labels:
     appstudio.openshift.io/application: bpfman-zstream
