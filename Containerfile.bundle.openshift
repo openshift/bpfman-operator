@@ -99,6 +99,7 @@ LABEL name="bpfman-operator-bundle" \
       distribution-scope=public \
       io.k8s.description="Bpfman Operator bundle for OpenShift." \
       io.openshift.tags="bpfman-operator-bundle" \
+      maintainer="support@redhat.com" \
       version=$BUILDVERSION \
       release=$BUILDVERSION \
       url="https://github.com/openshift/bpfman-operator" \
