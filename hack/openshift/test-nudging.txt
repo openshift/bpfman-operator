@@ -1,0 +1,9 @@
+This is a test file to verify that the bundle nudging mechanism works correctly.
+
+When this file is modified and merged to main, it should trigger the bundle build
+pipeline due to the CEL expression path condition: "hack/openshift/***".pathChanged()
+
+This ensures that PR #1036's changes to the Tekton pipeline CEL expressions didn't
+break the nudging mechanism for bundle builds.
+
+Test timestamp: 2025-10-23T20:05:00Z
