@@ -92,18 +92,18 @@ LABEL operators.operatorframework.io.test.mediatype.v1=scorecard+v1
 LABEL operators.operatorframework.io.test.config.v1=tests/scorecard/
 
 # Labels for konflux to release the images
-LABEL name="bpfman-operator" \
-      com.redhat.component="bpfman-operator" \
-      io.k8s.display-name="Bpfman Operator" \
-      description="The bpfman-operator manage bpfman ebpf programs on every node." \
+LABEL name="bpfman-operator-bundle" \
+      com.redhat.component="bpfman-operator-bundle-container" \
+      io.k8s.display-name="Bpfman Operator Bundle" \
+      description="Bpfman Operator bundle for OpenShift." \
       distribution-scope=public \
-      io.k8s.description="The bpfman-operator manage bpfman programs on every node. ." \
-      io.openshift.tags="bpfman-operator" \
+      io.k8s.description="Bpfman Operator bundle for OpenShift." \
+      io.openshift.tags="bpfman-operator-bundle" \
       version=$BUILDVERSION \
       release=$BUILDVERSION \
       url="https://github.com/openshift/bpfman-operator" \
       vendor="Red Hat, Inc." \
-      summary="Bpfman Operator"
+      summary="Bpfman Operator Bundle"
 
 # Copy files to locations specified by labels.
 COPY --from=builder /manifests /manifests/
