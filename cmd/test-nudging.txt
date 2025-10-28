@@ -1,0 +1,15 @@
+This is a test file to verify that component builds (operator and agent) trigger
+the complete build chain including bundle rebuilds.
+
+When this file is modified and merged to main, it should trigger:
+1. bpfman-operator build (via "cmd/***".pathChanged())
+2. bpfman-agent build (via "cmd/***".pathChanged())
+3. Component images are built and released
+4. Image SHA files in hack/konflux/images/ are updated
+5. Bundle rebuild triggers (via "hack/konflux/images/***".pathChanged() from PR #1078)
+6. Bundle updates with new image references
+
+This validates the complete end-to-end workflow after PR #1078 restored the
+hack/konflux/images path trigger in bundle CEL expressions.
+
+Test timestamp: 2025-10-28T11:25:00Z - Part 2: Testing component → image SHA → bundle workflow
