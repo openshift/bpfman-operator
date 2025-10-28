@@ -1,0 +1,11 @@
+This is a test file to verify that component builds (operator and agent) are
+triggered correctly when code-related paths change.
+
+When this file is modified and a PR is created, it should trigger both:
+- bpfman-operator build pipeline (due to "cmd/***".pathChanged())
+- bpfman-agent build pipeline (due to "cmd/***".pathChanged())
+
+This ensures the CEL expressions in the component pipelines are working correctly
+and that changes trigger the full build chain: components → image SHAs → bundle.
+
+Test timestamp: 2025-10-28T11:20:00Z - Testing component builds after PR #1078
