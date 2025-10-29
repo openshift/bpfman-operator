@@ -1,0 +1,21 @@
+Test operator and agent build nudge mechanism
+
+This change validates the end-to-end nudging flow for operator and agent
+components after the pipeline fixes in PR #1097.
+
+Both operator and agent build from the same source repository (bpfman-operator)
+and should trigger builds that cascade through to the bundle.
+
+Expected flow:
+1. Operator and agent build in parallel (both triggered by cmd/ change)
+2. Agent completes → nudges operator via build-nudges-ref
+3. Operator rebuild ensures synchronisation
+4. Operator nudges bundle via hack/konflux/images/bpfman-operator.txt
+5. Bundle rebuilds with all current component references
+6. Release snapshot created with consistent component versions
+
+This validates that the operator synchronisation point prevents race conditions
+where agent and operator might finish at different times, ensuring the bundle
+always builds with complete, consistent image references.
+
+Test timestamp: 2025-10-29T12:45:00Z
