@@ -15,7 +15,8 @@ metadata:
       || "go.mod".pathChanged() || "go.sum".pathChanged() || "Makefile".pathChanged()
       || "pkg/***".pathChanged() || "internal/***".pathChanged() || "test/***".pathChanged()
       || "vendor/***".pathChanged() || "config/***".pathChanged() || "hack/openshift/***".pathChanged()
-      || "OPENSHIFT-VERSION".pathChanged())
+      || "OPENSHIFT-VERSION".pathChanged() || "hack/konflux/images/bpfman-agent.txt".pathChanged()
+      || "hack/konflux/images/bpfman.txt".pathChanged())
   creationTimestamp: null
   labels:
     appstudio.openshift.io/application: bpfman-ystream
