@@ -1,0 +1,23 @@
+Test bundle synchronisation with PR #1100 configuration
+
+This change validates the updated bundle validation triggers after PR #1100,
+which removed wasteful bundle validation for component nudge files.
+
+With PR #1100 merged:
+- Component nudge PRs (bpfman-agent.txt, bpfman.txt) should NOT trigger any pipelines
+- Operator nudge PRs (bpfman-operator.txt) should only trigger bundle validation
+- Changes to cmd/ should trigger operator and agent builds as before
+
+Expected flow:
+1. This PR triggers operator and agent builds (cmd/ change)
+2. Agent completes first, nudges operator component
+3. Operator rebuilds ensuring synchronisation
+4. Operator nudges bundle via bpfman-operator.txt update
+5. Bundle rebuilds with all current component references
+6. Release snapshot created with consistent versions
+
+After merge, on-push builds will create new component images, and Renovate
+should create nudge PRs that do NOT trigger bundle validation (fixing the
+"could not find any PipelineRun" error from PRs #1104 and #1105).
+
+Test timestamp: 2025-10-29T14:30:00Z
