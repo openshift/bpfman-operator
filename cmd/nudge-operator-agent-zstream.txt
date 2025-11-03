@@ -1,0 +1,15 @@
+Nudge operator and agent zstream builds for release-0.5.8
+
+Trigger fresh operator and agent builds on the release-0.5.8 branch
+to ensure the latest zstream images are built and available.
+
+This change in cmd/ will trigger both operator and agent builds,
+which will then update their respective image reference files in
+hack/konflux/images/, eventually triggering a bundle rebuild.
+
+Expected flow:
+1. This PR triggers operator and agent builds
+2. Builds complete and update hack/konflux/images/
+3. Nudge PRs created for bpfman-operator.txt and bpfman-agent.txt
+4. After merge, bundle rebuilds with all current component references
+5. Release snapshot created with consistent zstream versions
