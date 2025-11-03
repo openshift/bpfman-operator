@@ -9,7 +9,7 @@ metadata:
     pipelinesascode.tekton.dev/cancel-in-progress: "false"
     pipelinesascode.tekton.dev/max-keep-runs: "3"
     pipelinesascode.tekton.dev/on-cel-expression: event == "push" && target_branch
-      == "release-4.20" && (".tekton/single-arch-build-pipeline.yaml".pathChanged() || ".tekton/bpfman-operator-bundle-zstream-pull-request.yaml".pathChanged()
+      == "release-0.5.8" && (".tekton/single-arch-build-pipeline.yaml".pathChanged() || ".tekton/bpfman-operator-bundle-zstream-pull-request.yaml".pathChanged()
       || ".tekton/bpfman-operator-bundle-zstream-push.yaml".pathChanged() || "Containerfile.bundle.openshift".pathChanged()
       || "bundle/***".pathChanged() || "hack/openshift/***".pathChanged() || "config/***".pathChanged()
       || "rpms.in.yaml".pathChanged() || "requirements.txt".pathChanged() || "OPENSHIFT-VERSION".pathChanged()
