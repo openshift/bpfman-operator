@@ -1,0 +1,5 @@
+Nudge bundle zstream rebuild to sync with current components
+
+Force bundle rebuild to pick up the current operator, agent, and daemon
+image references from hack/konflux/images/. This ensures the bundle CSV
+references match the images in the snapshot.
