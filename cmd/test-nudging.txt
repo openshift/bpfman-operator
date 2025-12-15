@@ -13,3 +13,9 @@ This validates the complete end-to-end workflow after PR #1078 restored the
 hack/konflux/images path trigger in bundle CEL expressions.
 
 Test timestamp: 2025-10-28T11:25:00Z - Part 2: Testing component → image SHA → bundle workflow
+
+Test timestamp: 2025-12-15T11:10:00Z - Testing fixed nudging configuration:
+- Agent/daemon now nudge bundle directly (not operator)
+- Simple branch annotations prevent competing PRs
+- Bundle triggers on all three image files (operator, agent, daemon)
+- Expected: Coordinated single-PR updates, consistent snapshots
