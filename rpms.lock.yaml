@@ -4,8 +4,8 @@ lockfileVendor: redhat
 arches:
 - arch: x86_64
   packages:
-  - url: https://cdn-ubi.redhat.com/content/public/ubi/dist/ubi9/9/x86_64/baseos/os/Packages/d/diffutils-3.7-12.el9.x86_64.rpm
-    repoid: ubi-9-for-x86_64-baseos-rpms
+  - url: https://cdn.redhat.com/content/dist/rhel9/9/x86_64/baseos/os/Packages/d/diffutils-3.7-12.el9.x86_64.rpm
+    repoid: rhel-9-for-x86_64-baseos-rpms
     size: 411559
     checksum: sha256:2d4c4fdfc10215af3c957c24995b79a26e27e6d76de4ed1f5198d25bf7ef9671
     name: diffutils

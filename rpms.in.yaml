@@ -2,7 +2,7 @@ packages:
   - diffutils
 contentOrigin:
   repofiles:
-    - ./ubi.repo
+    - ./redhat.repo
 arches:
   - x86_64
 context:

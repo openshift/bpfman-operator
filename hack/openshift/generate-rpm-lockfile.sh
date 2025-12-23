@@ -9,7 +9,7 @@ set -euo pipefail
 container_name="localhost/rpm-lockfile-prototype"
 rpms_in_file="rpms.in.yaml"
 rpms_lock_file="rpms.lock.yaml"
-default_base_image="registry.access.redhat.com/ubi9/python-312"
+default_base_image="registry.access.redhat.com/ubi9/ubi-minimal:latest"
 
 print_status() {
     echo "[INFO] $1"
@@ -42,7 +42,7 @@ OPTIONS:
 
 EXAMPLES:
     ${0##*/}                                          # Use default files and base image
-    ${0##*/} -b registry.access.redhat.com/ubi9/ubi  # Use different base image
+    ${0##*/} -b registry.access.redhat.com/ubi9/python-312  # Use different base image
     ${0##*/} --rebuild-container                      # Force container rebuild
     ${0##*/} -i my-rpms.in.yaml -o my-rpms.lock.yaml # Use custom input/output files
 
@@ -86,6 +86,7 @@ EOF
 
 build_container() {
     local rebuild_flag=${1:-false}
+    local temp_dir=$2
 
     if podman image exists "$container_name" && [[ "$rebuild_flag" != "true" ]]; then
         print_status "Container $container_name already exists, skipping build"
@@ -94,10 +95,6 @@ build_container() {
     fi
 
     print_status "Building rpm-lockfile-prototype container..."
-
-    local temp_dir
-    temp_dir=$(mktemp -d)
-    trap 'rm -rf "$temp_dir"' EXIT
 
     print_status "Cloning rpm-lockfile-prototype repository..."
     if ! git clone -q https://github.com/konflux-ci/rpm-lockfile-prototype.git "$temp_dir/rpm-lockfile-prototype"; then
@@ -180,55 +177,58 @@ validate_lockfile() {
     print_success "Lockfile validation passed"
 }
 
-main() {
-    local base_image="$default_base_image"
-    local input_file="$rpms_in_file"
-    local output_file="$rpms_lock_file"
-    local rebuild_container=false
+# Parse command line arguments
+base_image="$default_base_image"
+input_file="$rpms_in_file"
+output_file="$rpms_lock_file"
+rebuild_container=false
 
-    while [[ $# -gt 0 ]]; do
-        case $1 in
-            -i|--input)
-                input_file="$2"
-                shift 2
-                ;;
-            -o|--output)
-                output_file="$2"
-                shift 2
-                ;;
-            -b|--base-image)
-                base_image="$2"
-                shift 2
-                ;;
-            --rebuild-container)
-                rebuild_container=true
-                shift
-                ;;
-            -h|--help)
-                usage
-                exit 0
-                ;;
-            *)
-                print_error "Unknown option: $1"
-                usage
-                exit 1
-                ;;
-        esac
-    done
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -i|--input)
+            input_file="$2"
+            shift 2
+            ;;
+        -o|--output)
+            output_file="$2"
+            shift 2
+            ;;
+        -b|--base-image)
+            base_image="$2"
+            shift 2
+            ;;
+        --rebuild-container)
+            rebuild_container=true
+            shift
+            ;;
+        -h|--help)
+            usage
+            exit 0
+            ;;
+        *)
+            print_error "Unknown option: $1"
+            usage
+            exit 1
+            ;;
+    esac
+done
 
-    print_status "Starting RPM lockfile generation..."
-    print_status "Working directory: $(pwd)"
+print_status "Starting RPM lockfile generation..."
+print_status "Working directory: $(pwd)"
 
-    check_requirements
-    build_container "$rebuild_container"
-    generate_lockfile "$base_image" "$input_file" "$output_file"
-    validate_lockfile "$output_file"
+# Create temporary directory for container build operations
+temp_dir=$(mktemp -d)
 
-    print_success "RPM lockfile generation completed!"
-    print_status "Next steps:"
-    print_status "  1. Review the generated $output_file"
-    print_status "  2. Commit both $input_file and $output_file to your repository"
-    print_status "  3. Ensure your Tekton pipelines have the correct prefetch-input configuration"
-}
+# Set up cleanup trap
+trap 'rm -rf "$temp_dir"' EXIT
 
-main "$@"
+check_requirements
+build_container "$rebuild_container" "$temp_dir"
+generate_lockfile "$base_image" "$input_file" "$output_file"
+validate_lockfile "$output_file"
+
+print_success "RPM lockfile generation completed!"
+print_status "Next steps:"
+print_status "  1. Review the generated $output_file"
+print_status "  2. Commit both $input_file and $output_file to your repository"
+print_status "  3. Ensure your Tekton pipelines have the correct prefetch-input configuration"
