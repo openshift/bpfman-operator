@@ -2,9 +2,12 @@ packages:
   - diffutils
 contentOrigin:
   repofiles:
-    - ./ubi.repo
+    - ./redhat.repo
 arches:
   - x86_64
+  - s390x
+  - aarch64
+  - ppc64le
 context:
   containerfile:
     file: Containerfile.bundle.openshift
