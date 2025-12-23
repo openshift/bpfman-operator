@@ -2,6 +2,39 @@
 lockfileVersion: 1
 lockfileVendor: redhat
 arches:
+- arch: aarch64
+  packages:
+  - url: https://cdn.redhat.com/content/dist/rhel9/9/aarch64/baseos/os/Packages/d/diffutils-3.7-12.el9.aarch64.rpm
+    repoid: rhel-9-for-aarch64-baseos-rpms
+    size: 405687
+    checksum: sha256:524412f7ce56095508190116cb8ae141737857e4447979330c3cf75ca7017e6b
+    name: diffutils
+    evr: 3.7-12.el9
+    sourcerpm: diffutils-3.7-12.el9.src.rpm
+  source: []
+  module_metadata: []
+- arch: ppc64le
+  packages:
+  - url: https://cdn.redhat.com/content/dist/rhel9/9/ppc64le/baseos/os/Packages/d/diffutils-3.7-12.el9.ppc64le.rpm
+    repoid: rhel-9-for-ppc64le-baseos-rpms
+    size: 426776
+    checksum: sha256:1e58188524109f7f021d2a4a7b7ac5ab9ecab60dba1b1a0defc950a0f3b91f64
+    name: diffutils
+    evr: 3.7-12.el9
+    sourcerpm: diffutils-3.7-12.el9.src.rpm
+  source: []
+  module_metadata: []
+- arch: s390x
+  packages:
+  - url: https://cdn.redhat.com/content/dist/rhel9/9/s390x/baseos/os/Packages/d/diffutils-3.7-12.el9.s390x.rpm
+    repoid: rhel-9-for-s390x-baseos-rpms
+    size: 410465
+    checksum: sha256:a8015025ca40048059576a71f398c47d4b563e6a91e1e27a453f9212312df259
+    name: diffutils
+    evr: 3.7-12.el9
+    sourcerpm: diffutils-3.7-12.el9.src.rpm
+  source: []
+  module_metadata: []
 - arch: x86_64
   packages:
   - url: https://cdn.redhat.com/content/dist/rhel9/9/x86_64/baseos/os/Packages/d/diffutils-3.7-12.el9.x86_64.rpm

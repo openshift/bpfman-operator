@@ -130,8 +130,12 @@ set -euo pipefail
 # Register with activation key (values from environment)
 subscription-manager register --org="$RH_ORG_ID" --activationkey="$RH_ACTIVATION_KEY"
 
-# Disable problematic repos (EUS, debug, RHUI)
-subscription-manager repos --disable="*-eus-*" --disable="*-debug-*" --disable="*-rhui-*" 2>/dev/null || true
+# Disable all repos, then enable only the binary repos we need
+subscription-manager repos --disable="*"
+subscription-manager repos \
+    --enable="rhel-9-for-x86_64-baseos-rpms" \
+    --enable="rhel-9-for-x86_64-appstream-rpms" \
+    --enable="codeready-builder-for-rhel-9-x86_64-rpms"
 
 # Install dependencies
 dnf install -y pip skopeo
