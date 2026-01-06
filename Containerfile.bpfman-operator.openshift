@@ -20,6 +20,36 @@ WORKDIR /usr/src/bpfman-operator
 # Copy everything except what's excluded by the .dockerignore file.
 COPY . .
 
+# Replace upstream csi-node-driver-registrar image with Red Hat image.
+# CSI_NODE_DRIVER_REGISTRAR_VERSION should track the target OCP version.
+#
+# This RUN block performs a guarded sed replacement with the following safeguards:
+#   1. Fails if the upstream image reference is not found in an image: field
+#   2. Anchors on "image:" to avoid replacing references in comments or other contexts
+#   3. Handles both quoted and unquoted YAML values
+#   4. Always prints the diff for audit/transparency (diff returns 1 when files
+#      differ, so we suppress that with "|| true" to avoid triggering pipefail)
+#   5. Fails if no image: line was actually changed (guards against no-op)
+#   6. Fails if the target image reference is not present after replacement
+ARG CSI_NODE_DRIVER_REGISTRAR_VERSION=v4.20
+USER root
+RUN set -euo pipefail; \
+    ds=config/bpfman-deployment/daemonset.yaml; \
+    src='quay.io/bpfman/csi-node-driver-registrar'; \
+    dst="registry.redhat.io/openshift4/ose-csi-node-driver-registrar-rhel9:${CSI_NODE_DRIVER_REGISTRAR_VERSION}"; \
+    grep -qE "^[[:space:]]*image:[[:space:]]*\"?${src}:" "${ds}" \
+      || { echo "ERROR: expected ${ds} to contain image: ${src}:<tag>"; exit 1; }; \
+    cp "${ds}" "${ds}.bak"; \
+    sed -E -i \
+      "s#(^[[:space:]]*image:[[:space:]]*\"?)${src}:[^\"[:space:]]+(\"?)#\\1${dst}\\2#g" \
+      "${ds}"; \
+    echo "=== daemonset.yaml image substitution diff ==="; \
+    { diff -u "${ds}.bak" "${ds}" || true; } | tee /dev/stderr | grep -q '^[-+].*image:' \
+      || { echo "ERROR: expected image line to change"; exit 1; }; \
+    grep -qF "${dst}" "${ds}" \
+      || { echo "ERROR: replacement failed in ${ds}"; exit 1; }; \
+    rm -f "${ds}.bak"
+
 # Build
 # the GOARCH has not a default value to allow the binary be built according to the host where the command
 # was called. For example, if we call make docker-build in a local env which has the Apple Silicon M1 SO
