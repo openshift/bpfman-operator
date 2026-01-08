@@ -16,6 +16,7 @@ transform-bundle:
 	./update-bundle.py \
 		--csv-file ../../bundle/manifests/bpfman-operator.clusterserviceversion.yaml \
 		--image-pullspec "$$(cat ../konflux/images/bpfman-operator.txt)" \
+		--csi-pullspec "$$(grep CSI_NODE_DRIVER_REGISTRAR_IMAGE ../../OPENSHIFT-VERSION | cut -d= -f2)" \
 		--version "$$(grep BUILDVERSION ../../OPENSHIFT-VERSION | cut -d= -f2)"
 
 transform-configmap:

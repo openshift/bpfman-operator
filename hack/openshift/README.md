@@ -18,14 +18,17 @@ These scripts live in `hack/openshift/` because they're only used for Red Hat's 
 ## The scripts
 
 ### `update-bundle.py`
-Changes the ClusterServiceVersion file to use Red Hat images and adds OpenShift metadata.
+Changes the ClusterServiceVersion file to use Red Hat images and adds OpenShift metadata. Also builds the `relatedImages` section for disconnected environment support.
 
 ```bash
 ./hack/openshift/update-bundle.py \
   --csv-file bundle/manifests/bpfman-operator.clusterserviceversion.yaml \
   --image-pullspec <operator-image> \
+  --csi-pullspec <csi-node-driver-registrar-image> \
   --version <version>
 ```
+
+The `--csi-pullspec` argument is optional but recommended for building the `relatedImages` section that OLM uses for disconnected environments.
 
 ### `update-configmap.py`
 Replaces image references in the ConfigMap with Red Hat registry images.
@@ -39,16 +42,21 @@ Replaces image references in the ConfigMap with Red Hat registry images.
 
 
 ### `OPENSHIFT-VERSION`
-Contains the version number used for OpenShift builds. All OpenShift-specific Containerfiles use this value via a build argument (`BUILDVERSION`), and `update-bundle.py` uses it to set the CSV version field. Update this file when preparing a new release:
+Contains build-time configuration for OpenShift builds:
+
+- `BUILDVERSION` - Operator version for CSV metadata
+- `CSI_NODE_DRIVER_REGISTRAR_IMAGE` - Red Hat CSI image SHA-pinned reference (we don't build this image)
 
 ```bash
-echo "BUILDVERSION=0.5.7" > OPENSHIFT-VERSION
+BUILDVERSION=0.6.0
+CSI_NODE_DRIVER_REGISTRAR_IMAGE=registry.redhat.io/openshift4/ose-csi-node-driver-registrar-rhel9@sha256:...
 ```
 
-The Containerfiles read this at build time using `--build-arg-file OPENSHIFT-VERSION`, and the transformation scripts extract the version to update bundle metadata.
+The Containerfiles read these values at build time using `--build-arg-file OPENSHIFT-VERSION`. The CSI image is a Red Hat-provided image, not built by Konflux, so it's SHA-pinned here for security and reproducibility.
 
 ### `Makefile`
 Test the transformations locally:
+- `build-operator-container` - Build operator container with Red Hat CSI image
 - `transform-bundle` - Test bundle transformation
 - `transform-bundle-container` - Build bundle container with transformations
 - `transform-configmap` - Test ConfigMap transformation

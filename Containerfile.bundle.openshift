@@ -39,9 +39,13 @@ COPY --chown=default VERSION /VERSION
 RUN cp /manifests/bpfman-operator.clusterserviceversion.yaml /tmp/bpfman-operator.clusterserviceversion.yaml.orig
 RUN cp /manifests/bpfman-config_v1_configmap.yaml /tmp/bpfman-config_v1_configmap.yaml.orig
 
+# CSI_NODE_DRIVER_REGISTRAR_IMAGE comes from OPENSHIFT-VERSION build-arg file.
+# We don't build this image - it's a Red Hat-provided image.
+ARG CSI_NODE_DRIVER_REGISTRAR_IMAGE
 RUN hack/openshift/update-bundle.py \
     --csv-file /manifests/bpfman-operator.clusterserviceversion.yaml \
     --image-pullspec "$(cat hack/konflux/images/bpfman-operator.txt)" \
+    --csi-pullspec "${CSI_NODE_DRIVER_REGISTRAR_IMAGE}" \
     --version "${BUILDVERSION}"
 
 RUN hack/openshift/update-configmap.py \
