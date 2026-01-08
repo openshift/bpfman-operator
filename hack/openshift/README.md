@@ -24,11 +24,13 @@ Changes the ClusterServiceVersion file to use Red Hat images and adds OpenShift 
 ./hack/openshift/update-bundle.py \
   --csv-file bundle/manifests/bpfman-operator.clusterserviceversion.yaml \
   --image-pullspec <operator-image> \
+  --agent-pullspec <agent-image> \
+  --bpfman-pullspec <bpfman-image> \
   --csi-pullspec <csi-node-driver-registrar-image> \
   --version <version>
 ```
 
-The `--csi-pullspec` argument is optional but recommended for building the `relatedImages` section that OLM uses for disconnected environments.
+The `--agent-pullspec`, `--bpfman-pullspec`, and `--csi-pullspec` arguments are optional but recommended for building the `relatedImages` section that OLM uses for disconnected environments.
 
 ### `update-configmap.py`
 Replaces image references in the ConfigMap with Red Hat registry images.
@@ -57,8 +59,8 @@ The Containerfiles read these values at build time using `--build-arg-file OPENS
 ### `Makefile`
 Test the transformations locally:
 - `build-operator-container` - Build operator container with Red Hat CSI image
+- `build-bundle-container` - Build bundle container with transformations
 - `transform-bundle` - Test bundle transformation
-- `transform-bundle-container` - Build bundle container with transformations
 - `transform-configmap` - Test ConfigMap transformation
 - `generate-rpm-lockfile` - Generate rpms.lock.yaml for Konflux builds
 - `format` - Format Python files with Black

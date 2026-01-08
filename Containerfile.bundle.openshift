@@ -45,6 +45,8 @@ ARG CSI_NODE_DRIVER_REGISTRAR_IMAGE
 RUN hack/openshift/update-bundle.py \
     --csv-file /manifests/bpfman-operator.clusterserviceversion.yaml \
     --image-pullspec "$(cat hack/konflux/images/bpfman-operator.txt)" \
+    --agent-pullspec "$(cat hack/konflux/images/bpfman-agent.txt)" \
+    --bpfman-pullspec "$(cat hack/konflux/images/bpfman.txt)" \
     --csi-pullspec "${CSI_NODE_DRIVER_REGISTRAR_IMAGE}" \
     --version "${BUILDVERSION}"
 
