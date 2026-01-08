@@ -23,6 +23,15 @@ def main():
         "--image-pullspec", required=True, help="Operator image pullspec"
     )
     parser.add_argument(
+        "--agent-pullspec", help="bpfman-agent image pullspec (for relatedImages)"
+    )
+    parser.add_argument(
+        "--bpfman-pullspec", help="bpfman image pullspec (for relatedImages)"
+    )
+    parser.add_argument(
+        "--csi-pullspec", help="CSI node driver registrar image pullspec (for relatedImages)"
+    )
+    parser.add_argument(
         "--version", help="Version to set in CSV spec.version field"
     )
     parser.add_argument("--output", help="Output file (defaults to input file)")
@@ -143,6 +152,39 @@ def main():
         bpfman_operator_csv["spec"]["version"] = version
         # Update metadata.name to match version (pattern: bpfman-operator.v<version>)
         bpfman_operator_csv["metadata"]["name"] = f"bpfman-operator.v{version}"
+
+    # Build relatedImages section for disconnected environment support.
+    # OLM uses this to determine which images need to be mirrored.
+    related_images = []
+
+    # Operator image is always included
+    related_images.append({
+        "name": "bpfman-operator",
+        "image": args.image_pullspec
+    })
+
+    if args.agent_pullspec:
+        related_images.append({
+            "name": "bpfman-agent",
+            "image": args.agent_pullspec.strip()
+        })
+
+    if args.bpfman_pullspec:
+        related_images.append({
+            "name": "bpfman",
+            "image": args.bpfman_pullspec.strip()
+        })
+
+    if args.csi_pullspec:
+        related_images.append({
+            "name": "csi-node-driver-registrar",
+            "image": args.csi_pullspec.strip()
+        })
+
+    if related_images:
+        if "spec" not in bpfman_operator_csv:
+            bpfman_operator_csv["spec"] = {}
+        bpfman_operator_csv["spec"]["relatedImages"] = related_images
 
     try:
         if args.output == "-":
