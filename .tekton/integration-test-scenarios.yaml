@@ -4,9 +4,8 @@
 #   oc apply -f .tekton/integration-test-scenarios.yaml
 #
 # This scenario validates that snapshots are self-consistent before
-# allowing them to be released. This prevents releasing snapshots where
-# the bundle's embedded image references don't match the actual component
-# images in the snapshot.
+# allowing them to be released. Only runs when the bundle component
+# updates, since the bundle is the release artifact.
 ---
 apiVersion: appstudio.redhat.com/v1beta2
 kind: IntegrationTestScenario
@@ -16,8 +15,8 @@ metadata:
 spec:
   application: bpfman-ystream
   contexts:
-    - name: push
-      description: Validate snapshot consistency for push events only
+    - name: component_bpfman-operator-bundle-ystream
+      description: Validate snapshot only when bundle updates
   resolverRef:
     resolver: git
     params:
