@@ -41,10 +41,10 @@ spec:
               #!/bin/bash
               set -euo pipefail
 
-              # Extract git URL and revision from first component that has bpfman-operator in its URL
-              # (This handles application-level snapshots where COMPONENT_NAME label isn't set)
-              REPO_URL=$(echo "$SNAPSHOT" | jq -r '.components[] | select(.source.git.url | contains("bpfman-operator")) | .source.git.url' | head -1)
-              REVISION=$(echo "$SNAPSHOT" | jq -r '.components[] | select(.source.git.url | contains("bpfman-operator")) | .source.git.revision' | head -1)
+              # Extract git URL and revision from the bundle component
+              # Use the bundle since it's what we're validating and has the latest revision
+              REPO_URL=$(echo "$SNAPSHOT" | jq -r '.components[] | select(.name | contains("bundle")) | .source.git.url')
+              REVISION=$(echo "$SNAPSHOT" | jq -r '.components[] | select(.name | contains("bundle")) | .source.git.revision')
 
               echo "=== Clone Info ==="
               echo "Repo: $REPO_URL"
