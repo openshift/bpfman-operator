@@ -16,8 +16,8 @@ metadata:
 spec:
   application: bpfman-ystream
   contexts:
-    - name: application
-      description: Validate snapshot consistency for all push events
+    - name: push
+      description: Validate snapshot consistency for push events only
   resolverRef:
     resolver: git
     params:
