@@ -1,0 +1,114 @@
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: snapshot-validation
+spec:
+  description: |
+    Validates snapshot consistency for bpfman releases by running
+    hack/konflux/scripts/validate-snapshot.py from the repository.
+
+    Checks that the bundle's embedded image references match the
+    component images in the snapshot.
+  params:
+    - name: SNAPSHOT
+      description: The JSON string of the Snapshot under test
+      type: string
+  tasks:
+    - name: parse-metadata
+      taskRef:
+        resolver: git
+        params:
+          - name: url
+            value: https://github.com/konflux-ci/integration-examples
+          - name: revision
+            value: main
+          - name: pathInRepo
+            value: tasks/test_metadata.yaml
+      params:
+        - name: SNAPSHOT
+          value: $(params.SNAPSHOT)
+
+    - name: validate-snapshot
+      runAfter:
+        - parse-metadata
+      params:
+        - name: SNAPSHOT
+          value: $(params.SNAPSHOT)
+      taskSpec:
+        params:
+          - name: SNAPSHOT
+            type: string
+        results:
+          - name: TEST_OUTPUT
+            description: Test output in JSON format
+        volumes:
+          - name: source
+            emptyDir: {}
+        steps:
+          - name: clone
+            image: quay.io/konflux-ci/konflux-test:stable
+            volumeMounts:
+              - name: source
+                mountPath: /source
+            script: |
+              #!/bin/bash
+              set -euo pipefail
+
+              REPO_URL="$(tasks.parse-metadata.results.source-git-url)"
+              REVISION="$(tasks.parse-metadata.results.source-git-revision)"
+
+              echo "=== Cloning Repository ==="
+              echo "Repo: $REPO_URL"
+              echo "Revision: $REVISION"
+              echo ""
+
+              git clone --depth 1 "$REPO_URL" /source/repo
+              cd /source/repo
+              git fetch origin "$REVISION" --depth 1
+              git checkout "$REVISION"
+
+              echo "Clone complete"
+
+          - name: run-validation
+            image: quay.io/konflux-ci/konflux-test:stable
+            volumeMounts:
+              - name: source
+                mountPath: /source
+            env:
+              - name: SNAPSHOT
+                value: $(params.SNAPSHOT)
+            script: |
+              #!/bin/bash
+              set -euo pipefail
+
+              SCRIPT="/source/repo/hack/konflux/scripts/validate-snapshot.py"
+
+              if [ ! -f "$SCRIPT" ]; then
+                echo "ERROR: Validation script not found at $SCRIPT"
+                TIMESTAMP=$(date -u +%s)
+                echo '{"result":"FAILURE","timestamp":"'"$TIMESTAMP"'","failures":1,"successes":0,"warnings":0}' | tee $(results.TEST_OUTPUT.path)
+                exit 1
+              fi
+
+              echo "Running: $SCRIPT"
+              echo ""
+
+              # Run the validation script
+              if python3 "$SCRIPT"; then
+                RESULT="SUCCESS"
+                FAILURES=0
+                SUCCESSES=1
+              else
+                RESULT="FAILURE"
+                FAILURES=1
+                SUCCESSES=0
+              fi
+
+              echo ""
+              TIMESTAMP=$(date -u +%s)
+              echo '{"result":"'"$RESULT"'","timestamp":"'"$TIMESTAMP"'","failures":'"$FAILURES"',"successes":'"$SUCCESSES"',"warnings":0}' | tee $(results.TEST_OUTPUT.path)
+
+              # Exit with appropriate code
+              if [ "$RESULT" = "FAILURE" ]; then
+                exit 1
+              fi
