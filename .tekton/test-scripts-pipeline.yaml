@@ -74,12 +74,36 @@ spec:
               ls -la /source/repo/hack/konflux/scripts/ || echo "Directory not found"
 
               echo ""
+              echo "=== Environment Discovery ==="
+              echo "Listing /usr/bin:"
+              ls /usr/bin | sort | tr '\n' ' '
+              echo ""
+              echo ""
+              echo "Listing /usr/local/bin:"
+              ls /usr/local/bin 2>/dev/null | sort | tr '\n' ' ' || echo "(empty or not found)"
+              echo ""
+              echo ""
+              echo "Checking for python:"
+              which python python3 2>/dev/null || echo "python/python3 not in PATH"
+              echo ""
+              echo "Checking for podman/skopeo:"
+              which podman skopeo 2>/dev/null || echo "podman/skopeo not in PATH"
+              echo ""
+
               echo "=== Running hello.sh ==="
               if [ -f /source/repo/hack/konflux/scripts/hello.sh ]; then
                 bash /source/repo/hack/konflux/scripts/hello.sh
-                RESULT="SUCCESS"
               else
                 echo "Script not found at /source/repo/hack/konflux/scripts/hello.sh"
+              fi
+
+              echo ""
+              echo "=== Running hello.py ==="
+              if [ -f /source/repo/hack/konflux/scripts/hello.py ]; then
+                python3 /source/repo/hack/konflux/scripts/hello.py
+                RESULT="SUCCESS"
+              else
+                echo "Script not found at /source/repo/hack/konflux/scripts/hello.py"
                 RESULT="FAILURE"
               fi
 
