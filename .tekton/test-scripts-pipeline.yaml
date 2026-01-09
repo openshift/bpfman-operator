@@ -1,0 +1,88 @@
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: test-scripts-access
+spec:
+  description: |
+    Minimal test to prove integration test pipelines can clone the repo
+    and execute scripts from it. If this works, we can refactor the
+    validation pipeline to use external scripts instead of embedded bash.
+  params:
+    - name: SNAPSHOT
+      description: The JSON string of the Snapshot under test
+      type: string
+  tasks:
+    - name: parse-metadata
+      taskRef:
+        resolver: git
+        params:
+          - name: url
+            value: https://github.com/konflux-ci/integration-examples
+          - name: revision
+            value: main
+          - name: pathInRepo
+            value: tasks/test_metadata.yaml
+      params:
+        - name: SNAPSHOT
+          value: $(params.SNAPSHOT)
+
+    - name: test-scripts-access
+      runAfter:
+        - parse-metadata
+      taskSpec:
+        results:
+          - name: TEST_OUTPUT
+            description: Test output in JSON format
+        volumes:
+          - name: source
+            emptyDir: {}
+        steps:
+          - name: clone
+            image: quay.io/konflux-ci/konflux-test:stable
+            volumeMounts:
+              - name: source
+                mountPath: /source
+            script: |
+              #!/bin/bash
+              set -euo pipefail
+
+              REPO_URL="$(tasks.parse-metadata.results.source-git-url)"
+              REVISION="$(tasks.parse-metadata.results.source-git-revision)"
+
+              echo "=== Clone Info ==="
+              echo "Repo: $REPO_URL"
+              echo "Revision: $REVISION"
+              echo ""
+
+              git clone --depth 1 "$REPO_URL" /source/repo
+              cd /source/repo
+              git fetch origin "$REVISION" --depth 1
+              git checkout "$REVISION"
+
+              echo "Clone complete"
+
+          - name: list-and-run
+            image: quay.io/konflux-ci/konflux-test:stable
+            volumeMounts:
+              - name: source
+                mountPath: /source
+            script: |
+              #!/bin/bash
+              set -euo pipefail
+
+              echo "=== Listing hack/konflux/scripts/ ==="
+              ls -la /source/repo/hack/konflux/scripts/ || echo "Directory not found"
+
+              echo ""
+              echo "=== Running hello.sh ==="
+              if [ -f /source/repo/hack/konflux/scripts/hello.sh ]; then
+                bash /source/repo/hack/konflux/scripts/hello.sh
+                RESULT="SUCCESS"
+              else
+                echo "Script not found at /source/repo/hack/konflux/scripts/hello.sh"
+                RESULT="FAILURE"
+              fi
+
+              echo ""
+              TIMESTAMP=$(date -u +%s)
+              echo "{\"result\":\"$RESULT\",\"timestamp\":\"$TIMESTAMP\",\"failures\":0,\"successes\":1,\"warnings\":0}" | tee $(results.TEST_OUTPUT.path)

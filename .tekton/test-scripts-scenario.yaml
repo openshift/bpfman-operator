@@ -1,0 +1,27 @@
+# Test IntegrationTestScenario to prove scripts can be accessed from repo
+#
+# Apply to cluster with:
+#   oc apply -f .tekton/test-scripts-scenario.yaml
+#
+# Delete after testing:
+#   oc delete integrationtestscenario bpfman-test-scripts-access -n ocp-bpfman-tenant
+---
+apiVersion: appstudio.redhat.com/v1beta2
+kind: IntegrationTestScenario
+metadata:
+  name: bpfman-test-scripts-access
+  namespace: ocp-bpfman-tenant
+spec:
+  application: bpfman-ystream
+  contexts:
+    - name: application
+      description: Test that pipeline can clone repo and access scripts
+  resolverRef:
+    resolver: git
+    params:
+      - name: url
+        value: https://github.com/openshift/bpfman-operator
+      - name: revision
+        value: main
+      - name: pathInRepo
+        value: .tekton/test-scripts-pipeline.yaml
