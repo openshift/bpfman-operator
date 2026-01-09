@@ -3,7 +3,7 @@ ARG BUILDVERSION
 # Build the manager binary
 ARG BUILDPLATFORM
 
-FROM --platform=$BUILDPLATFORM registry.access.redhat.com/ubi9/go-toolset:9.7-1767788444 AS bpfman-operator-build
+FROM --platform=$BUILDPLATFORM registry.access.redhat.com/ubi9/go-toolset:9.7-1767889151 AS bpfman-operator-build
 
 ARG BUILDVERSION
 ARG BUILDPLATFORM
