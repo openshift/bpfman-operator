@@ -1,0 +1,231 @@
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: snapshot-validation
+spec:
+  description: |
+    Validates snapshot consistency for bpfman releases. Performs two checks:
+    1. All components from the same repository are built from the same commit
+    2. The bundle's embedded image references match the snapshot's component images
+  params:
+    - name: SNAPSHOT
+      description: The JSON string of the Snapshot under test
+      type: string
+  tasks:
+    - name: check-same-commit
+      params:
+        - name: SNAPSHOT
+          value: $(params.SNAPSHOT)
+      taskSpec:
+        params:
+          - name: SNAPSHOT
+            type: string
+        results:
+          - name: TEST_OUTPUT
+            description: Test output in JSON format
+        steps:
+          - name: test-snapshot-component
+            image: quay.io/konflux-ci/konflux-test:stable
+            env:
+              - name: SNAPSHOT
+                value: $(params.SNAPSHOT)
+              - name: SNAPSHOT_URL
+                valueFrom:
+                  fieldRef:
+                    fieldPath: metadata.annotations['pac.test.appstudio.openshift.io/source-repo-url']
+              - name: SNAPSHOT_SHA
+                valueFrom:
+                  fieldRef:
+                    fieldPath: metadata.annotations['pac.test.appstudio.openshift.io/sha']
+            script: |
+              #!/bin/bash
+              set -e
+
+              echo "=== Check 1: Same Commit Validation ==="
+              echo "Snapshot URL: $SNAPSHOT_URL"
+              echo "Snapshot SHA: $SNAPSHOT_SHA"
+              echo ""
+
+              snapshotUrlWithoutSuffix=$(echo $SNAPSHOT_URL | sed 's/\.git$//')
+              FAILURES=0
+              SUCCESSES=0
+
+              components=$(jq -c '.components[]' <<< "${SNAPSHOT}")
+              while read -r component; do
+                componentUrl=$(echo "$component" | jq -r '.source.git.url')
+                componentUrlWithoutSuffix=$(echo $componentUrl | sed 's/\.git$//')
+                name=$(echo "$component" | jq -r '.name')
+                componentSha=$(echo "$component" | jq -r '.source.git.revision')
+
+                # Check if component git url equals to snapshot git url
+                if [[ $componentUrlWithoutSuffix == $snapshotUrlWithoutSuffix ]]; then
+                  if [[ $componentSha != $SNAPSHOT_SHA ]]; then
+                    echo "FAIL: Component $name has SHA: $componentSha, expected: $SNAPSHOT_SHA"
+                    FAILURES=$((FAILURES + 1))
+                  else
+                    echo "PASS: Component $name matches snapshot SHA"
+                    SUCCESSES=$((SUCCESSES + 1))
+                  fi
+                else
+                  echo "SKIP: Component $name is from different repo ($componentUrlWithoutSuffix)"
+                fi
+              done < <(echo "$components")
+
+              echo ""
+              TIMESTAMP=$(date -u +%s)
+              if [ $FAILURES -gt 0 ]; then
+                echo "FAILED: $FAILURES component(s) have mismatched commits"
+                echo '{"result":"FAILURE","timestamp":"'$TIMESTAMP'","failures":'$FAILURES',"successes":'$SUCCESSES',"warnings":0}' | tee $(results.TEST_OUTPUT.path)
+                exit 1
+              else
+                echo "PASSED: All components from same repo have matching commits"
+                echo '{"result":"SUCCESS","timestamp":"'$TIMESTAMP'","failures":0,"successes":'$SUCCESSES',"warnings":0}' | tee $(results.TEST_OUTPUT.path)
+              fi
+
+    - name: check-bundle-references
+      params:
+        - name: SNAPSHOT
+          value: $(params.SNAPSHOT)
+      runAfter:
+        - check-same-commit
+      taskSpec:
+        params:
+          - name: SNAPSHOT
+            type: string
+        results:
+          - name: TEST_OUTPUT
+            description: Test output in JSON format
+        steps:
+          - name: validate-bundle-references
+            image: quay.io/konflux-ci/konflux-test:stable
+            env:
+              - name: SNAPSHOT
+                value: $(params.SNAPSHOT)
+            script: |
+              #!/bin/bash
+              set -euo pipefail
+
+              echo "=== Check 2: Bundle Reference Validation ==="
+              echo ""
+
+              # Parse snapshot to get component images
+              BUNDLE_IMAGE=$(echo "$SNAPSHOT" | jq -r '.components[] | select(.name | test("bundle")) | .containerImage')
+              OPERATOR_IMAGE=$(echo "$SNAPSHOT" | jq -r '.components[] | select(.name | test("operator")) | select(.name | test("bundle") | not) | .containerImage')
+              AGENT_IMAGE=$(echo "$SNAPSHOT" | jq -r '.components[] | select(.name | test("agent")) | .containerImage')
+              DAEMON_IMAGE=$(echo "$SNAPSHOT" | jq -r '.components[] | select(.name | test("daemon")) | .containerImage')
+
+              echo "Snapshot components:"
+              echo "  Bundle:   $BUNDLE_IMAGE"
+              echo "  Operator: $OPERATOR_IMAGE"
+              echo "  Agent:    $AGENT_IMAGE"
+              echo "  Daemon:   $DAEMON_IMAGE"
+              echo ""
+
+              # Extract digests from snapshot
+              SNAPSHOT_OPERATOR=$(echo "$OPERATOR_IMAGE" | grep -oE 'sha256:[a-f0-9]+' || echo "")
+              SNAPSHOT_AGENT=$(echo "$AGENT_IMAGE" | grep -oE 'sha256:[a-f0-9]+' || echo "")
+              SNAPSHOT_DAEMON=$(echo "$DAEMON_IMAGE" | grep -oE 'sha256:[a-f0-9]+' || echo "")
+
+              # Extract bundle and get its manifests
+              echo "Extracting bundle manifests..."
+              WORKDIR=$(mktemp -d)
+              trap "rm -rf $WORKDIR" EXIT
+
+              # Try oc image extract first, fall back to skopeo+umoci
+              if command -v oc &> /dev/null; then
+                oc image extract "$BUNDLE_IMAGE" --path /manifests/:$WORKDIR/manifests/ --confirm 2>/dev/null || true
+              fi
+
+              if [ ! -d "$WORKDIR/manifests" ] || [ -z "$(ls -A $WORKDIR/manifests 2>/dev/null)" ]; then
+                echo "Using skopeo/umoci fallback..."
+                skopeo copy "docker://$BUNDLE_IMAGE" "oci:$WORKDIR/bundle:latest" --quiet
+                umoci unpack --image "$WORKDIR/bundle:latest" "$WORKDIR/unpacked"
+                mkdir -p "$WORKDIR/manifests"
+                cp -r "$WORKDIR/unpacked/rootfs/manifests/"* "$WORKDIR/manifests/" 2>/dev/null || true
+              fi
+
+              CSV_FILE=$(find "$WORKDIR/manifests" -name "*.clusterserviceversion.yaml" 2>/dev/null | head -1)
+              CONFIGMAP_FILE=$(find "$WORKDIR/manifests" -name "*configmap*.yaml" 2>/dev/null | head -1)
+
+              if [ -z "$CSV_FILE" ]; then
+                echo "ERROR: Could not find CSV in bundle"
+                TIMESTAMP=$(date -u +%s)
+                echo '{"result":"FAILURE","timestamp":"'$TIMESTAMP'","failures":1,"successes":0,"warnings":0}' | tee $(results.TEST_OUTPUT.path)
+                exit 1
+              fi
+
+              echo "Found CSV: $(basename $CSV_FILE)"
+              [ -n "$CONFIGMAP_FILE" ] && echo "Found ConfigMap: $(basename $CONFIGMAP_FILE)"
+              echo ""
+
+              # Extract references from bundle
+              # Operator is in relatedImages in CSV
+              BUNDLE_OPERATOR=$(grep -E "bpfman.*rhel9-operator@sha256|bpfman-operator.*@sha256" "$CSV_FILE" | grep -oE 'sha256:[a-f0-9]+' | head -1 || echo "")
+
+              # Agent and daemon are in ConfigMap
+              BUNDLE_AGENT=""
+              BUNDLE_DAEMON=""
+              if [ -n "$CONFIGMAP_FILE" ]; then
+                BUNDLE_AGENT=$(grep -E "bpfman-agent@sha256|bpfman.agent.image" "$CONFIGMAP_FILE" | grep -oE 'sha256:[a-f0-9]+' | head -1 || echo "")
+                BUNDLE_DAEMON=$(grep -E "bpfman@sha256|bpfman.image" "$CONFIGMAP_FILE" | grep -oE 'sha256:[a-f0-9]+' | head -1 || echo "")
+              fi
+
+              echo "Bundle references:"
+              echo "  Operator: ${BUNDLE_OPERATOR:-<not found>}"
+              echo "  Agent:    ${BUNDLE_AGENT:-<not found>}"
+              echo "  Daemon:   ${BUNDLE_DAEMON:-<not found>}"
+              echo ""
+
+              # Compare
+              FAILURES=0
+              SUCCESSES=0
+
+              echo "=== Validation Results ==="
+
+              if [ -n "$BUNDLE_OPERATOR" ] && [ -n "$SNAPSHOT_OPERATOR" ]; then
+                if [ "$BUNDLE_OPERATOR" = "$SNAPSHOT_OPERATOR" ]; then
+                  echo "PASS: Operator reference matches"
+                  SUCCESSES=$((SUCCESSES + 1))
+                else
+                  echo "FAIL: Operator mismatch"
+                  echo "  Bundle wants: $BUNDLE_OPERATOR"
+                  echo "  Snapshot has: $SNAPSHOT_OPERATOR"
+                  FAILURES=$((FAILURES + 1))
+                fi
+              fi
+
+              if [ -n "$BUNDLE_AGENT" ] && [ -n "$SNAPSHOT_AGENT" ]; then
+                if [ "$BUNDLE_AGENT" = "$SNAPSHOT_AGENT" ]; then
+                  echo "PASS: Agent reference matches"
+                  SUCCESSES=$((SUCCESSES + 1))
+                else
+                  echo "FAIL: Agent mismatch"
+                  echo "  Bundle wants: $BUNDLE_AGENT"
+                  echo "  Snapshot has: $SNAPSHOT_AGENT"
+                  FAILURES=$((FAILURES + 1))
+                fi
+              fi
+
+              if [ -n "$BUNDLE_DAEMON" ] && [ -n "$SNAPSHOT_DAEMON" ]; then
+                if [ "$BUNDLE_DAEMON" = "$SNAPSHOT_DAEMON" ]; then
+                  echo "PASS: Daemon reference matches"
+                  SUCCESSES=$((SUCCESSES + 1))
+                else
+                  echo "FAIL: Daemon mismatch"
+                  echo "  Bundle wants: $BUNDLE_DAEMON"
+                  echo "  Snapshot has: $SNAPSHOT_DAEMON"
+                  FAILURES=$((FAILURES + 1))
+                fi
+              fi
+
+              echo ""
+              TIMESTAMP=$(date -u +%s)
+              if [ $FAILURES -gt 0 ]; then
+                echo "FAILED: Snapshot has $FAILURES bundle reference mismatch(es)"
+                echo "This snapshot should NOT be released - bundle references don't match components."
+                echo '{"result":"FAILURE","timestamp":"'$TIMESTAMP'","failures":'$FAILURES',"successes":'$SUCCESSES',"warnings":0}' | tee $(results.TEST_OUTPUT.path)
+                exit 1
+              else
+                echo "PASSED: All bundle references match snapshot components"
+                echo '{"result":"SUCCESS","timestamp":"'$TIMESTAMP'","failures":0,"successes":'$SUCCESSES',"warnings":0}' | tee $(results.TEST_OUTPUT.path)
+              fi
