@@ -58,56 +58,32 @@ def parse_snapshot(snapshot_json):
 
 def extract_bundle_refs(bundle_image):
     """Extract component SHAs referenced in bundle CSV and ConfigMap."""
-    # Create temporary container using podman
-    result = subprocess.run(
-        ["podman", "create", bundle_image],
-        capture_output=True,
-        text=True,
-        check=True
-    )
-    container_id = result.stdout.strip()
+    # Create temporary directory for extraction
+    with tempfile.TemporaryDirectory() as tmpdir:
+        manifests_dir = os.path.join(tmpdir, "manifests")
+        os.makedirs(manifests_dir)
 
-    try:
-        # Extract CSV
-        with tempfile.NamedTemporaryFile(mode="w+", suffix=".yaml", delete=False) as csv_file:
-            csv_path = csv_file.name
-
+        # Extract manifests from bundle image using oc image extract
+        # This works without a container runtime
         subprocess.run(
             [
-                "podman", "cp",
-                f"{container_id}:/manifests/bpfman-operator.clusterserviceversion.yaml",
-                csv_path,
+                "oc", "image", "extract", bundle_image,
+                f"--path=/manifests/:{manifests_dir}",
             ],
             check=True,
             capture_output=True,
+            text=True,
         )
+
+        # Read CSV
+        csv_path = os.path.join(manifests_dir, "bpfman-operator.clusterserviceversion.yaml")
         with open(csv_path) as f:
             csv_content = f.read()
 
-        # Extract ConfigMap
-        with tempfile.NamedTemporaryFile(mode="w+", suffix=".yaml", delete=False) as cm_file:
-            cm_path = cm_file.name
-
-        subprocess.run(
-            [
-                "podman", "cp",
-                f"{container_id}:/manifests/bpfman-config_v1_configmap.yaml",
-                cm_path,
-            ],
-            check=True,
-            capture_output=True,
-        )
+        # Read ConfigMap
+        cm_path = os.path.join(manifests_dir, "bpfman-config_v1_configmap.yaml")
         with open(cm_path) as f:
             cm_content = f.read()
-
-    finally:
-        # Clean up container and temp files
-        subprocess.run(["podman", "rm", container_id], check=True, capture_output=True)
-        try:
-            os.unlink(csv_path)
-            os.unlink(cm_path)
-        except:
-            pass
 
     # Parse operator SHA from CSV (in relatedImages)
     operator_match = re.search(
