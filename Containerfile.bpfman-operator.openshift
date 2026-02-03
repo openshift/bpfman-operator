@@ -3,7 +3,7 @@ ARG BUILDVERSION
 # Build the manager binary
 ARG BUILDPLATFORM
 
-FROM --platform=$BUILDPLATFORM registry.access.redhat.com/ubi9/go-toolset:9.7-1767889151 AS bpfman-operator-build
+FROM --platform=$BUILDPLATFORM registry.access.redhat.com/ubi9/go-toolset:9.7-1769430014 AS bpfman-operator-build
 
 ARG BUILDVERSION
 ARG BUILDPLATFORM
@@ -57,7 +57,7 @@ RUN set -euo pipefail; \
 ENV GOEXPERIMENT=strictfipsruntime
 RUN CGO_ENABLED=1 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -tags strictfipsruntime -mod vendor -o bpfman-operator ./cmd/bpfman-operator/main.go
 
-FROM --platform=$TARGETPLATFORM registry.access.redhat.com/ubi9/ubi-minimal:9.7-1764794109
+FROM --platform=$TARGETPLATFORM registry.access.redhat.com/ubi9/ubi-minimal:9.7-1769056855
 
 ARG BUILDVERSION
 # The following ARGs are set internally by docker or podman on multiarch builds
