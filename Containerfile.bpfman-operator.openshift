@@ -28,7 +28,7 @@ COPY . .
 ENV GOEXPERIMENT=strictfipsruntime
 RUN CGO_ENABLED=1 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -tags strictfipsruntime -mod vendor -o bpfman-operator ./cmd/bpfman-operator/main.go
 
-FROM --platform=$TARGETPLATFORM registry.access.redhat.com/ubi9/ubi-minimal:9.7-1770203734
+FROM --platform=$TARGETPLATFORM registry.access.redhat.com/ubi9/ubi-minimal:9.7-1770267347
 
 ARG BUILDVERSION
 # The following ARGs are set internally by docker or podman on multiarch builds
