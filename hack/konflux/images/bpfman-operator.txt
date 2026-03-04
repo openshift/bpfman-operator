@@ -1,1 +1,1 @@
-registry.redhat.io/bpfman/bpfman-rhel9-operator@sha256:dee06ace4ff25834e5d92b2f770ecce5affe825c993f46c8f51b8b18f1489897
+registry.redhat.io/bpfman/bpfman-rhel9-operator@sha256:b2babc30637965ac1a6c9d96e67528fdd37650feb0aebc43b4e239133329dd71
