@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 
-"""Update bpfman ConfigMap with Red Hat image references.
+"""Update bpfman Config CR with Red Hat image references.
 
-This tool transforms upstream bpfman-operator ConfigMap manifests for
+This tool transforms upstream bpfman-operator Config manifests for
 Red Hat distribution by replacing upstream image references with Red
 Hat registry pullspecs whilst preserving YAML formatting and
 structure.
@@ -10,7 +10,6 @@ structure.
 
 import argparse
 import sys
-import os
 from ruamel.yaml import YAML
 
 
@@ -41,54 +40,43 @@ def save_yaml_file(file_path, data):
         sys.exit(1)
 
 
-def update_configmap(configmap_file, agent_pullspec, bpfman_pullspec, output_file=None):
+def update_config(config_file, agent_pullspec, bpfman_pullspec, output_file=None):
 
     if output_file is None:
-        output_file = configmap_file
+        output_file = config_file
 
-    print(f"Updating ConfigMap file: {configmap_file}")
+    print(f"Updating Config file: {config_file}")
 
-    configmap = load_yaml_file(configmap_file)
+    config = load_yaml_file(config_file)
 
-    with open(configmap_file, "r") as f:
-        content = f.read()
+    if "spec" not in config:
+        print("Error: Config file missing 'spec' field", file=sys.stderr)
+        sys.exit(1)
 
-    replacements = {
-        "quay.io/bpfman/bpfman-agent:latest": f'"{agent_pullspec}"',
-        "quay.io/bpfman/bpfman:latest": f'"{bpfman_pullspec}"',
-    }
+    if "agent" not in config["spec"]:
+        config["spec"]["agent"] = {}
+    config["spec"]["agent"]["image"] = agent_pullspec
 
-    for old, new in replacements.items():
-        content = content.replace(old, new)
+    if "daemon" not in config["spec"]:
+        config["spec"]["daemon"] = {}
+    config["spec"]["daemon"]["image"] = bpfman_pullspec
 
-    yaml = YAML()
-    yaml.preserve_quotes = True
-    yaml.width = 4096
-    configmap = yaml.load(content)
+    save_yaml_file(output_file, config)
 
-    if "data" not in configmap:
-        configmap["data"] = {}
-
-    configmap["data"]["bpfman.agent.image"] = agent_pullspec
-    configmap["data"]["bpfman.image"] = bpfman_pullspec
-
-    save_yaml_file(output_file, configmap)
-
-    print(f"ConfigMap file updated successfully: {output_file}")
+    print(f"Config file updated successfully: {output_file}")
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Update bpfman ConfigMap with Red Hat image references.",
+        description="Update bpfman Config CR with Red Hat image references.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""Examples:
-  %(prog)s --configmap-file input.yaml --agent-pullspec registry.redhat.io/bpfman/agent@sha256:... --bpfman-pullspec registry.redhat.io/bpfman/bpfman@sha256:...
-  %(prog)s --configmap-file input.yaml --output output.yaml --agent-pullspec registry.redhat.io/bpfman/agent@sha256:... --bpfman-pullspec registry.redhat.io/bpfman/bpfman@sha256:...
+  %(prog)s --config-file config.yaml --agent-pullspec registry.redhat.io/bpfman/agent@sha256:... --bpfman-pullspec registry.redhat.io/bpfman/bpfman@sha256:...
 """,
     )
 
     parser.add_argument(
-        "--configmap-file", required=True, help="Path to the ConfigMap file to update"
+        "--config-file", required=True, help="Path to the Config CR file to update"
     )
     parser.add_argument(
         "--agent-pullspec", required=True, help="bpfman-agent image pullspec"
@@ -111,7 +99,7 @@ def main():
         print("Error: Bpfman pullspec cannot be empty", file=sys.stderr)
         sys.exit(1)
 
-    update_configmap(args.configmap_file, agent_pullspec, bpfman_pullspec, args.output)
+    update_config(args.config_file, agent_pullspec, bpfman_pullspec, args.output)
 
 
 if __name__ == "__main__":

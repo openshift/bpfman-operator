@@ -32,12 +32,12 @@ Changes the ClusterServiceVersion file to use Red Hat images and adds OpenShift 
 
 The `--agent-pullspec`, `--bpfman-pullspec`, and `--csi-pullspec` arguments are optional but recommended for building the `relatedImages` section that OLM uses for disconnected environments.
 
-### `update-configmap.py`
-Replaces image references in the ConfigMap with Red Hat registry images.
+### `update-config.py`
+Replaces image references in the Config CR with Red Hat registry images. The Config CR is the upstream mechanism for configuring the bpfman operator (replacing the previous ConfigMap approach).
 
 ```bash
-./hack/openshift/update-configmap.py \
-  --configmap-file bundle/manifests/bpfman-config_v1_configmap.yaml \
+./hack/openshift/update-config.py \
+  --config-file bundle/manifests/bpfman.io_v1alpha1_config.yaml \
   --agent-pullspec <agent-image> \
   --bpfman-pullspec <daemon-image>
 ```
@@ -61,7 +61,7 @@ Test the transformations locally:
 - `build-operator-container` - Build operator container with Red Hat CSI image
 - `build-bundle-container` - Build bundle container with transformations
 - `transform-bundle` - Test bundle transformation
-- `transform-configmap` - Test ConfigMap transformation
+- `transform-config` - Test Config CR transformation
 - `generate-rpm-lockfile` - Generate rpms.lock.yaml for Konflux builds
 - `format` - Format Python files with Black
 - `format-check` - Check Python formatting
@@ -98,7 +98,7 @@ make
 
 # Run specific transformations
 make transform-bundle
-make transform-configmap
+make transform-config
 ```
 
 From the project root:
@@ -116,9 +116,9 @@ hack/openshift/update-bundle.py \
   --image-pullspec "$(cat hack/openshift/konflux/images/bpfman-operator.txt)" \
   --version "$(grep BUILDVERSION OPENSHIFT-VERSION | cut -d= -f2)"
 
-# ConfigMap transformation
-hack/openshift/update-configmap.py \
-  --configmap-file bundle/manifests/bpfman-config_v1_configmap.yaml \
+# Config CR transformation
+hack/openshift/update-config.py \
+  --config-file bundle/manifests/bpfman.io_v1alpha1_config.yaml \
   --agent-pullspec "$(cat hack/openshift/konflux/images/bpfman-agent.txt)" \
   --bpfman-pullspec "$(cat hack/openshift/konflux/images/bpfman.txt)"
 ```

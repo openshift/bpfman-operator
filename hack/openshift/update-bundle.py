@@ -29,11 +29,10 @@ def main():
         "--bpfman-pullspec", help="bpfman image pullspec (for relatedImages)"
     )
     parser.add_argument(
-        "--csi-pullspec", help="CSI node driver registrar image pullspec (for relatedImages)"
+        "--csi-pullspec",
+        help="CSI node driver registrar image pullspec (for relatedImages)",
     )
-    parser.add_argument(
-        "--version", help="Version to set in CSV spec.version field"
-    )
+    parser.add_argument("--version", help="Version to set in CSV spec.version field")
     parser.add_argument("--output", help="Output file (defaults to input file)")
     parser.add_argument(
         "files",
@@ -75,12 +74,21 @@ def main():
         ("The bpfman Operator", "The eBPF manager Operator"),
         ("name: The bpfman Community", "name: Red Hat"),
         ("url: https://bpfman.io", "url: https://www.redhat.com"),
-        ("https://github.com/bpfman/bpfman", "https://github.com/openshift/bpfman-operator"),
-        ("https://github.com/bpfman/bpfman-operator", "https://github.com/openshift/bpfman-operator"),
+        (
+            "https://github.com/bpfman/bpfman",
+            "https://github.com/openshift/bpfman-operator",
+        ),
+        (
+            "https://github.com/bpfman/bpfman-operator",
+            "https://github.com/openshift/bpfman-operator",
+        ),
         ("https://bpfman.netlify.app/", "https://github.com/openshift/bpfman-operator"),
         ("Support bpfman Community", "Support Red Hat"),
         ("bpfman Community", "Red Hat"),
-        ("repository: https://github.com/bpfman/", "repository: https://github.com/openshift/bpfman-operator"),
+        (
+            "repository: https://github.com/bpfman/",
+            "repository: https://github.com/openshift/bpfman-operator",
+        ),
     ]
 
     for old, new in replacements:
@@ -158,28 +166,20 @@ def main():
     related_images = []
 
     # Operator image is always included
-    related_images.append({
-        "name": "bpfman-operator",
-        "image": args.image_pullspec
-    })
+    related_images.append({"name": "bpfman-operator", "image": args.image_pullspec})
 
     if args.agent_pullspec:
-        related_images.append({
-            "name": "bpfman-agent",
-            "image": args.agent_pullspec.strip()
-        })
+        related_images.append(
+            {"name": "bpfman-agent", "image": args.agent_pullspec.strip()}
+        )
 
     if args.bpfman_pullspec:
-        related_images.append({
-            "name": "bpfman",
-            "image": args.bpfman_pullspec.strip()
-        })
+        related_images.append({"name": "bpfman", "image": args.bpfman_pullspec.strip()})
 
     if args.csi_pullspec:
-        related_images.append({
-            "name": "csi-node-driver-registrar",
-            "image": args.csi_pullspec.strip()
-        })
+        related_images.append(
+            {"name": "csi-node-driver-registrar", "image": args.csi_pullspec.strip()}
+        )
 
     # Disabled: relatedImages causes EC olm.unmapped_references failures because
     # the nudged registry.redhat.io refs don't exist yet at validation time.

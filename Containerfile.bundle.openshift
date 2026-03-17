@@ -6,10 +6,10 @@ ARG BUILDVERSION
 # transforms them for Red Hat distribution by:
 # - Updating ClusterServiceVersion (CSV) with Red Hat branding and image references
 # - Adding architecture labels and OpenShift feature annotations
-# - Updating ConfigMap with Red Hat image pullspecs
+# - Updating Config CR with Red Hat image pullspecs
 #
 # To test the Python tools locally without container build:
-#   make -C hack/openshift transform-bundle transform-configmap
+#   make -C hack/openshift transform-bundle transform-config
 #
 # To build locally within a container:
 #   make -C hack/openshift container-transform-bundle
@@ -37,7 +37,7 @@ COPY --chown=default bundle/tests/scorecard /tests/scorecard/
 COPY --chown=default VERSION /VERSION
 
 RUN cp /manifests/bpfman-operator.clusterserviceversion.yaml /tmp/bpfman-operator.clusterserviceversion.yaml.orig
-RUN cp /manifests/bpfman-config_v1_configmap.yaml /tmp/bpfman-config_v1_configmap.yaml.orig
+RUN cp /manifests/bpfman.io_v1alpha1_config.yaml /tmp/bpfman.io_v1alpha1_config.yaml.orig
 
 # CSI_NODE_DRIVER_REGISTRAR_IMAGE comes from OPENSHIFT-VERSION build-arg file.
 # We don't build this image - it's a Red Hat-provided image.
@@ -50,16 +50,16 @@ RUN hack/openshift/update-bundle.py \
     --csi-pullspec "${CSI_NODE_DRIVER_REGISTRAR_IMAGE}" \
     --version "${BUILDVERSION}"
 
-RUN hack/openshift/update-configmap.py \
-    --configmap-file /manifests/bpfman-config_v1_configmap.yaml \
+RUN hack/openshift/update-config.py \
+    --config-file /manifests/bpfman.io_v1alpha1_config.yaml \
     --agent-pullspec "$(cat hack/konflux/images/bpfman-agent.txt)" \
     --bpfman-pullspec "$(cat hack/konflux/images/bpfman.txt)"
 
 RUN echo "=== CSV transformation changes ===" && \
     diff -u /tmp/bpfman-operator.clusterserviceversion.yaml.orig /manifests/bpfman-operator.clusterserviceversion.yaml || true
 
-RUN echo "=== ConfigMap transformation changes ===" && \
-    diff -u /tmp/bpfman-config_v1_configmap.yaml.orig /manifests/bpfman-config_v1_configmap.yaml || true
+RUN echo "=== Config CR transformation changes ===" && \
+    diff -u /tmp/bpfman.io_v1alpha1_config.yaml.orig /manifests/bpfman.io_v1alpha1_config.yaml || true
 
 # Verify that the transformation applied correctly
 RUN echo "=== Verifying bundle transformation ===" && \
