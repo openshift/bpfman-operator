@@ -5,6 +5,26 @@ metadata:
   name: operator-role
 rules:
 - apiGroups:
+  - ""
+  resources:
+  - configmaps
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - nodes
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
   - apps
   resources:
   - daemonsets
@@ -20,39 +40,6 @@ rules:
   - bpfman.io
   resources:
   - bpfapplications
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - bpfman.io
-  resources:
-  - bpfapplications/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - bpfman.io
-  resources:
-  - bpfapplications/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - bpfman.io
-  resources:
-  - bpfapplicationstates
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - bpfman.io
-  resources:
   - clusterbpfapplications
   verbs:
   - create
@@ -65,12 +52,15 @@ rules:
 - apiGroups:
   - bpfman.io
   resources:
+  - bpfapplications/finalizers
   - clusterbpfapplications/finalizers
+  - configs/finalizers
   verbs:
   - update
 - apiGroups:
   - bpfman.io
   resources:
+  - bpfapplications/status
   - clusterbpfapplications/status
   verbs:
   - get
@@ -79,6 +69,7 @@ rules:
 - apiGroups:
   - bpfman.io
   resources:
+  - bpfapplicationstates
   - clusterbpfapplicationstates
   verbs:
   - get
@@ -87,25 +78,13 @@ rules:
 - apiGroups:
   - bpfman.io
   resources:
-  - configmaps/finalizers
+  - configs
   verbs:
+  - delete
+  - get
+  - list
+  - patch
   - update
-- apiGroups:
-  - ""
-  resources:
-  - configmaps
-  verbs:
-  - create
-  - get
-  - list
-  - watch
-- apiGroups:
-  - ""
-  resources:
-  - nodes
-  verbs:
-  - get
-  - list
   - watch
 - apiGroups:
   - security.openshift.io
@@ -116,6 +95,8 @@ rules:
   - delete
   - get
   - list
+  - patch
+  - update
   - watch
 - apiGroups:
   - storage.k8s.io
@@ -126,6 +107,8 @@ rules:
   - delete
   - get
   - list
+  - patch
+  - update
   - watch
 ---
 apiVersion: rbac.authorization.k8s.io/v1

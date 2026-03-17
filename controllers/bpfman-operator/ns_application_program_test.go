@@ -31,6 +31,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
@@ -71,7 +72,7 @@ func appNsProgramReconcile(t *testing.T, multiCondition bool) {
 				},
 			},
 		},
-		Priority:  int32(xdpPriority),
+		Priority:  ptr.To(int32(xdpPriority)),
 		ProceedOn: proceedOn,
 	}
 
@@ -168,7 +169,7 @@ func appNsProgramReconcile(t *testing.T, multiCondition bool) {
 	}
 
 	// Require no requeue
-	require.False(t, res.Requeue)
+	require.Zero(t, res.RequeueAfter)
 
 	// Check the BpfNsApplicationState Object was created successfully
 	err = cl.Get(ctx, types.NamespacedName{Name: App.Name, Namespace: App.Namespace}, App)
@@ -201,7 +202,7 @@ func appNsProgramReconcile(t *testing.T, multiCondition bool) {
 	}
 
 	// Require no requeue
-	require.False(t, res.Requeue)
+	require.Zero(t, res.RequeueAfter)
 
 	// Check the BpfNsApplicationState Object was created successfully
 	err = cl.Get(ctx, types.NamespacedName{Name: App.Name, Namespace: App.Namespace}, App)
