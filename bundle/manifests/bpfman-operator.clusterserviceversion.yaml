@@ -994,7 +994,7 @@ metadata:
     capabilities: Basic Install
     categories: OpenShift Optional
     containerImage: quay.io/bpfman/bpfman-operator:latest
-    createdAt: "2026-03-19T18:20:23Z"
+    createdAt: "2026-03-20T12:14:06Z"
     description: The bpfman Operator is designed to manage eBPF programs for applications.
     features.operators.openshift.io/cnf: "false"
     features.operators.openshift.io/cni: "false"
@@ -1035,7 +1035,7 @@ metadata:
     operatorframework.io/arch.arm64: supported
     operatorframework.io/arch.ppc64le: supported
     operatorframework.io/arch.s390x: supported
-  name: bpfman-operator.v0.5.7-dev
+  name: bpfman-operator.v0.6.0
   namespace: placeholder
 spec:
   apiservicedefinitions: {}
@@ -1575,8 +1575,8 @@ spec:
                 - name: BPFMAN_IMG
                   value: quay.io/bpfman/bpfman:latest
                 - name: BPFMAN_AGENT_IMG
-                  value: quay.io/bpfman/bpfman-agent:latest
-                image: quay.io/bpfman/bpfman-operator:latest
+                  value: quay.int.frobware.com/amcdermo/bpfman-agent:latest
+                image: quay.int.frobware.com/amcdermo/bpfman-operator:latest
                 imagePullPolicy: IfNotPresent
                 livenessProbe:
                   httpGet:
@@ -1705,4 +1705,4 @@ spec:
   provider:
     name: The bpfman Community
     url: https://bpfman.io/
-  version: 0.5.7-dev
+  version: 0.6.0
