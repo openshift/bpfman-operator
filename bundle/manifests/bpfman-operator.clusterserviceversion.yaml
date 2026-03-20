@@ -989,32 +989,12 @@ metadata:
             ],
             "updateCount": 2
           }
-        },
-        {
-          "apiVersion": "bpfman.io/v1alpha1",
-          "kind": "Config",
-          "metadata": {
-            "name": "bpfman-config",
-            "namespace": "bpfman"
-          },
-          "spec": {
-            "agent": {
-              "image": "quay.io/bpfman/bpfman-agent:latest",
-              "logLevel": "info"
-            },
-            "configuration": "[database]\nmax_retries = 30\nmillisec_delay = 10000\n[signing]\nallow_unsigned = true\nverify_enabled = true\n",
-            "daemon": {
-              "image": "quay.io/bpfman/bpfman:latest",
-              "logLevel": "info"
-            },
-            "namespace": "bpfman"
-          }
         }
       ]
     capabilities: Basic Install
     categories: OpenShift Optional
     containerImage: quay.io/bpfman/bpfman-operator:latest
-    createdAt: "2026-03-11T14:43:51Z"
+    createdAt: "2026-03-19T18:20:23Z"
     description: The bpfman Operator is designed to manage eBPF programs for applications.
     features.operators.openshift.io/cnf: "false"
     features.operators.openshift.io/cni: "false"
@@ -1422,6 +1402,17 @@ spec:
         - apiGroups:
           - ""
           resources:
+          - namespaces
+          - services
+          verbs:
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - ""
+          resources:
           - nodes
           verbs:
           - get
@@ -1444,6 +1435,7 @@ spec:
           resources:
           - bpfapplications
           - clusterbpfapplications
+          - configs
           verbs:
           - create
           - delete
@@ -1479,10 +1471,26 @@ spec:
           - list
           - watch
         - apiGroups:
-          - bpfman.io
+          - monitoring.coreos.com
           resources:
-          - configs
+          - servicemonitors
           verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - rbac.authorization.k8s.io
+          resources:
+          - clusterrolebindings
+          - clusterroles
+          - rolebindings
+          - roles
+          verbs:
+          - create
           - delete
           - get
           - list
@@ -1534,7 +1542,6 @@ spec:
             metadata:
               annotations:
                 kubectl.kubernetes.io/default-container: manager
-                service.beta.openshift.io/serving-cert-secret-name: controller-manager-metrics-tls
               labels:
                 control-plane: controller-manager
             spec:
@@ -1565,6 +1572,10 @@ spec:
                 env:
                 - name: GO_LOG
                   value: info
+                - name: BPFMAN_IMG
+                  value: quay.io/bpfman/bpfman:latest
+                - name: BPFMAN_AGENT_IMG
+                  value: quay.io/bpfman/bpfman-agent:latest
                 image: quay.io/bpfman/bpfman-operator:latest
                 imagePullPolicy: IfNotPresent
                 livenessProbe:
@@ -1596,18 +1607,10 @@ spec:
                   capabilities:
                     drop:
                     - ALL
-                volumeMounts:
-                - mountPath: /tmp/k8s-webhook-server/serving-certs
-                  name: controller-manager-metrics-tls
-                  readOnly: true
               securityContext:
                 runAsNonRoot: true
               serviceAccountName: bpfman-operator
               terminationGracePeriodSeconds: 10
-              volumes:
-              - name: controller-manager-metrics-tls
-                secret:
-                  secretName: controller-manager-metrics-tls
       permissions:
       - rules:
         - apiGroups:

@@ -4,6 +4,7 @@
 package lifecycle
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os"
@@ -27,10 +28,12 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/kubernetes"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/tools/remotecommand"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+	"sigs.k8s.io/yaml"
 )
 
 const (
@@ -84,7 +87,50 @@ verify_enabled = true`,
 
 	runtimeClient client.Client
 	isOpenShift   bool
+	hasMonitoring bool
 )
+
+// managedObjects returns the set of resources the operator is expected
+// to own.  Platform-conditional gating (monitoring, OpenShift) appears
+// here and nowhere else.  Each call returns fresh objects suitable for
+// the API client to deserialise into.
+func managedObjects() []client.Object {
+	objects := []client.Object{
+		&corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      internal.BpfmanCmName,
+				Namespace: internal.BpfmanNamespace,
+			},
+		},
+		&storagev1.CSIDriver{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: internal.BpfmanCsiDriverName,
+			},
+		},
+		&appsv1.DaemonSet{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      internal.BpfmanDsName,
+				Namespace: internal.BpfmanNamespace,
+			},
+		},
+	}
+	if hasMonitoring {
+		objects = append(objects, &appsv1.DaemonSet{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      internal.BpfmanMetricsProxyDsName,
+				Namespace: internal.BpfmanNamespace,
+			},
+		})
+	}
+	if isOpenShift {
+		objects = append(objects, &osv1.SecurityContextConstraints{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: internal.BpfmanRestrictedSccName,
+			},
+		})
+	}
+	return objects
+}
 
 // TestLifecycle runs the complete integration test suite for the bpfman operator lifecycle.
 // It tests configuration management, resource creation/deletion, modification handling,
@@ -104,6 +150,10 @@ func TestLifecycle(t *testing.T) {
 		t.Fatalf("Could not get new kubernetes config, err: %q", err)
 	}
 	isOpenShift, err = internal.IsOpenShift(kubernetesClient.DiscoveryClient, logger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hasMonitoring, err = internal.HasMonitoringAPI(kubernetesClient.DiscoveryClient, logger)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -128,6 +178,12 @@ func TestLifecycle(t *testing.T) {
 	}
 	if originalConfig != nil {
 		originalConfig.ResourceVersion = ""
+	}
+
+	// Verify the operator bootstrapped the Config CR with correct defaults.
+	t.Logf("Running: TestConfigBootstrap")
+	if err := testConfigBootstrap(ctx, t, originalConfig); err != nil {
+		t.Fatalf("Failed config bootstrap verification: %q", err)
 	}
 
 	// After this test run, we want to restore to the original configuration.
@@ -165,6 +221,12 @@ func TestLifecycle(t *testing.T) {
 		t.Fatalf("Failed config cascading deletion: %q", err)
 	}
 
+	// Test recovery via the default-config subcommand exec'd in the operator pod.
+	t.Logf("Running: TestDefaultConfigRecovery")
+	if err := testDefaultConfigRecovery(ctx, t); err != nil {
+		t.Fatalf("Failed default-config recovery: %q", err)
+	}
+
 	// Test config recreation with modified settings.
 	t.Logf("Running: TestConfigRecreationWithModifiedSettings")
 	if err := testConfigCreation(ctx, t, newConfig); err != nil {
@@ -196,47 +258,12 @@ func getCurrentConfig(ctx context.Context) (*v1alpha1.Config, error) {
 
 // testResourceDeletion verifies that the operator can recreate resources after deletion.
 // Deletes each managed resource individually and waits for the operator to recreate them.
-// Tests the operator's reconciliation capabilities and resource recovery.
 func testResourceDeletion(ctx context.Context, t *testing.T) error {
-	objects := []client.Object{
-		&corev1.ConfigMap{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      internal.BpfmanCmName,
-				Namespace: internal.BpfmanNamespace,
-			},
-		},
-		&storagev1.CSIDriver{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: internal.BpfmanCsiDriverName,
-			},
-		},
-		&appsv1.DaemonSet{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      internal.BpfmanDsName,
-				Namespace: internal.BpfmanNamespace,
-			},
-		},
-		&appsv1.DaemonSet{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      internal.BpfmanMetricsProxyDsName,
-				Namespace: internal.BpfmanNamespace,
-			},
-		},
-	}
-	// Add OpenShift SCC deletion if on OpenShift.
-	if isOpenShift {
-		objects = append(
-			objects,
-			&osv1.SecurityContextConstraints{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: internal.BpfmanRestrictedSccName,
-				},
-			},
-		)
-	}
-	for _, obj := range objects {
+	for _, obj := range managedObjects() {
+		key := client.ObjectKeyFromObject(obj)
+		t.Logf("Deleting %s", key)
 		if err := runtimeClient.Delete(ctx, obj); err != nil {
-			return fmt.Errorf("could not delete obj %v, err: %w", obj, err)
+			return fmt.Errorf("could not delete %s: %w", key, err)
 		}
 		if err := waitForResourceCreation(ctx); err != nil {
 			return err
@@ -388,50 +415,52 @@ func testResourceModification(ctx context.Context, t *testing.T) error {
 		return err
 	}
 
-	// Test metrics proxy DaemonSet modification.
-	metricsDs := &appsv1.DaemonSet{}
-	metricsDsKey := types.NamespacedName{Name: internal.BpfmanMetricsProxyDsName, Namespace: internal.BpfmanNamespace}
-	if err := runtimeClient.Get(ctx, metricsDsKey, metricsDs); err != nil {
-		return err
-	}
-	origServiceAccountName = metricsDs.Spec.Template.Spec.ServiceAccountName
-	// Create a new DaemonSet for server-side apply (this way, no retry needed).
-	applyMetricsDs := &appsv1.DaemonSet{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: "apps/v1",
-			Kind:       "DaemonSet",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      internal.BpfmanMetricsProxyDsName,
-			Namespace: internal.BpfmanNamespace,
-		},
-		Spec: appsv1.DaemonSetSpec{
-			Selector: metricsDs.Spec.Selector,
-			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metricsDs.Spec.Template.ObjectMeta,
-				Spec: corev1.PodSpec{
-					ServiceAccountName: invalidValue,
+	// Test metrics proxy DaemonSet modification if monitoring is available.
+	if hasMonitoring {
+		metricsDs := &appsv1.DaemonSet{}
+		metricsDsKey := types.NamespacedName{Name: internal.BpfmanMetricsProxyDsName, Namespace: internal.BpfmanNamespace}
+		if err := runtimeClient.Get(ctx, metricsDsKey, metricsDs); err != nil {
+			return err
+		}
+		origServiceAccountName = metricsDs.Spec.Template.Spec.ServiceAccountName
+		// Create a new DaemonSet for server-side apply (this way, no retry needed).
+		applyMetricsDs := &appsv1.DaemonSet{
+			TypeMeta: metav1.TypeMeta{
+				APIVersion: "apps/v1",
+				Kind:       "DaemonSet",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      internal.BpfmanMetricsProxyDsName,
+				Namespace: internal.BpfmanNamespace,
+			},
+			Spec: appsv1.DaemonSetSpec{
+				Selector: metricsDs.Spec.Selector,
+				Template: corev1.PodTemplateSpec{
+					ObjectMeta: metricsDs.Spec.Template.ObjectMeta,
+					Spec: corev1.PodSpec{
+						ServiceAccountName: invalidValue,
+					},
 				},
 			},
-		},
-	}
-	if err := runtimeClient.Patch(ctx, applyMetricsDs, client.Apply, client.ForceOwnership, client.FieldOwner(fieldOwner)); err != nil {
-		return fmt.Errorf("could not apply patch, err: %w", err)
-	}
-	// Wait until reconciliation.
-	if err := waitUntilCondition(
-		ctx,
-		func() (bool, error) {
-			t.Logf("Checking that metrics ds was correctly reconciled")
-			metricsDs := &appsv1.DaemonSet{}
-			metricsDsKey := types.NamespacedName{Name: internal.BpfmanMetricsProxyDsName, Namespace: internal.BpfmanNamespace}
-			if err := runtimeClient.Get(ctx, metricsDsKey, metricsDs); err != nil {
-				return false, err
-			}
-			return metricsDs.Spec.Template.Spec.ServiceAccountName == origServiceAccountName, nil
-		},
-	); err != nil {
-		return err
+		}
+		if err := runtimeClient.Patch(ctx, applyMetricsDs, client.Apply, client.ForceOwnership, client.FieldOwner(fieldOwner)); err != nil {
+			return fmt.Errorf("could not apply patch, err: %w", err)
+		}
+		// Wait until reconciliation.
+		if err := waitUntilCondition(
+			ctx,
+			func() (bool, error) {
+				t.Logf("Checking that metrics ds was correctly reconciled")
+				metricsDs := &appsv1.DaemonSet{}
+				metricsDsKey := types.NamespacedName{Name: internal.BpfmanMetricsProxyDsName, Namespace: internal.BpfmanNamespace}
+				if err := runtimeClient.Get(ctx, metricsDsKey, metricsDs); err != nil {
+					return false, err
+				}
+				return metricsDs.Spec.Template.Spec.ServiceAccountName == origServiceAccountName, nil
+			},
+		); err != nil {
+			return err
+		}
 	}
 
 	// Test OpenShift SCC modification if on OpenShift.
@@ -461,7 +490,7 @@ func testResourceModification(ctx context.Context, t *testing.T) error {
 		if err := waitUntilCondition(
 			ctx,
 			func() (bool, error) {
-				t.Logf("Checking that standard metrics ds was correctly reconciled")
+				t.Logf("Checking that SCC was correctly reconciled")
 				scc := &osv1.SecurityContextConstraints{}
 				sccKey := types.NamespacedName{Name: internal.BpfmanRestrictedSccName}
 				if err := runtimeClient.Get(ctx, sccKey, scc); err != nil {
@@ -550,106 +579,31 @@ func testOperatorPodHealthy(ctx context.Context) error {
 	return nil
 }
 
-// waitForResourceCreation polls for all required bpfman resources to be created and ready.
-// Checks for CSI driver, ConfigMap, and both DaemonSets (bpfman and metrics proxy).
-// Returns error if timeout is reached or if context is cancelled.
+// waitForResourceCreation polls for all managed resources to be created and ready.
 func waitForResourceCreation(ctx context.Context) error {
 	return waitUntilCondition(ctx, func() (bool, error) {
-		// Check CSI driver exists.
-		csiDriver := &storagev1.CSIDriver{}
-		if err := runtimeClient.Get(ctx, types.NamespacedName{Name: internal.BpfmanCsiDriverName}, csiDriver); err != nil {
-			if errors.IsNotFound(err) {
-				return false, nil
-			}
-			return false, err
-		}
-		// Check ConfigMap exists.
-		configMap := &corev1.ConfigMap{}
-		cmKey := types.NamespacedName{Name: internal.BpfmanConfigName, Namespace: internal.BpfmanNamespace}
-		if err := runtimeClient.Get(ctx, cmKey, configMap); err != nil {
-			if errors.IsNotFound(err) {
-				return false, nil
-			}
-			return false, err
-		}
-		// Check DaemonSet is ready.
-		ds := &appsv1.DaemonSet{}
-		dsKey := types.NamespacedName{Name: internal.BpfmanDsName, Namespace: internal.BpfmanNamespace}
-		if err := runtimeClient.Get(ctx, dsKey, ds); err != nil && errors.IsNotFound(err) || ds.Status.NumberAvailable == 0 {
-			return false, nil
-		} else if err != nil {
-			return false, err
-		}
-		// Check Metrics Proxy DaemonSet is ready.
-		mds := &appsv1.DaemonSet{}
-		mdsKey := types.NamespacedName{Name: internal.BpfmanMetricsProxyDsName, Namespace: internal.BpfmanNamespace}
-		if err := runtimeClient.Get(ctx, mdsKey, mds); err != nil && errors.IsNotFound(err) || mds.Status.NumberAvailable == 0 {
-			return false, nil
-		} else if err != nil {
-			return false, err
-		}
-		// Check the SCC exists.
-		if isOpenShift {
-			scc := &osv1.SecurityContextConstraints{}
-			sccKey := types.NamespacedName{Name: internal.BpfmanRestrictedSccName}
-			if err := runtimeClient.Get(ctx, sccKey, scc); err != nil {
+		for _, obj := range managedObjects() {
+			if err := runtimeClient.Get(ctx, client.ObjectKeyFromObject(obj), obj); err != nil {
 				if errors.IsNotFound(err) {
 					return false, nil
 				}
 				return false, err
+			}
+			if ds, ok := obj.(*appsv1.DaemonSet); ok && ds.Status.NumberAvailable == 0 {
+				return false, nil
 			}
 		}
 		return true, nil
 	})
 }
 
-// waitForResourceDeletion polls for all bpfman managed resources to be deleted.
-// Checks that CSI driver, ConfigMap, and both DaemonSets are no longer present.
-// Returns error if timeout is reached or if context is cancelled.
+// waitForResourceDeletion polls for all managed resources to be deleted.
 func waitForResourceDeletion(ctx context.Context, t *testing.T) error {
 	return waitUntilCondition(ctx, func() (bool, error) {
-		// Check CSI driver.
-		csiDriver := &storagev1.CSIDriver{}
-		if err := runtimeClient.Get(ctx, types.NamespacedName{Name: internal.BpfmanCsiDriverName}, csiDriver); err == nil {
-			t.Logf("csi driver not yet deleted, %v", *csiDriver)
-			return false, nil
-		} else if !errors.IsNotFound(err) {
-			return false, err
-		}
-		// Check ConfigMap.
-		configMap := &corev1.ConfigMap{}
-		cmKey := types.NamespacedName{Name: internal.BpfmanConfigName, Namespace: internal.BpfmanNamespace}
-		if err := runtimeClient.Get(ctx, cmKey, configMap); err == nil {
-			t.Logf("config map not yet deleted, %v", *configMap)
-			return false, nil
-		} else if !errors.IsNotFound(err) {
-			return false, err
-		}
-		// Check DaemonSet.
-		ds := &appsv1.DaemonSet{}
-		dsKey := types.NamespacedName{Name: internal.BpfmanDsName, Namespace: internal.BpfmanNamespace}
-		if err := runtimeClient.Get(ctx, dsKey, ds); err == nil {
-			t.Logf("daemonset not yet deleted, %v", *ds)
-			return false, nil
-		} else if !errors.IsNotFound(err) {
-			return false, err
-		}
-
-		// Check Metrics Proxy DaemonSet.
-		mds := &appsv1.DaemonSet{}
-		mdsKey := types.NamespacedName{Name: internal.BpfmanMetricsProxyDsName, Namespace: internal.BpfmanNamespace}
-		if err := runtimeClient.Get(ctx, mdsKey, mds); err == nil {
-			t.Logf("daemonset not yet deleted, %v", *mds)
-			return false, nil
-		} else if !errors.IsNotFound(err) {
-			return false, err
-		}
-		// Check OpenShift SCC if on OpenShift.
-		if isOpenShift {
-			scc := &osv1.SecurityContextConstraints{}
-			sccKey := types.NamespacedName{Name: internal.BpfmanRestrictedSccName}
-			if err := runtimeClient.Get(ctx, sccKey, scc); err == nil {
-				t.Logf("scc not yet deleted, %v", *scc)
+		for _, obj := range managedObjects() {
+			key := client.ObjectKeyFromObject(obj)
+			if err := runtimeClient.Get(ctx, key, obj); err == nil {
+				t.Logf("%s not yet deleted", key)
 				return false, nil
 			} else if !errors.IsNotFound(err) {
 				return false, err
@@ -679,6 +633,133 @@ func waitUntilCondition(ctx context.Context, conditionFunc func() (bool, error))
 			}
 		}
 	}
+}
+
+// testConfigBootstrap verifies that the operator auto-created the Config CR
+// on startup with the expected default values from compiled constants. Image
+// fields are checked for non-emptiness only because they come from
+// environment variables which vary between test environments.
+func testConfigBootstrap(ctx context.Context, t *testing.T, config *v1alpha1.Config) error {
+	if config == nil {
+		return fmt.Errorf("expected operator to bootstrap Config CR on startup, but none found")
+	}
+	if config.Name != internal.BpfmanConfigName {
+		return fmt.Errorf("expected Config name %q, got %q", internal.BpfmanConfigName, config.Name)
+	}
+	if config.Spec.Namespace != internal.DefaultConfigNamespace {
+		return fmt.Errorf("expected namespace %q, got %q", internal.DefaultConfigNamespace, config.Spec.Namespace)
+	}
+	if config.Spec.Agent.LogLevel != internal.DefaultLogLevel {
+		return fmt.Errorf("expected agent log level %q, got %q", internal.DefaultLogLevel, config.Spec.Agent.LogLevel)
+	}
+	if config.Spec.Daemon.LogLevel != internal.DefaultLogLevel {
+		return fmt.Errorf("expected daemon log level %q, got %q", internal.DefaultLogLevel, config.Spec.Daemon.LogLevel)
+	}
+	if config.Spec.Agent.HealthProbePort != internal.DefaultHealthProbePort {
+		return fmt.Errorf("expected health probe port %d, got %d", internal.DefaultHealthProbePort, config.Spec.Agent.HealthProbePort)
+	}
+	if config.Spec.Configuration != internal.DefaultConfiguration {
+		return fmt.Errorf("expected default configuration block, got %q", config.Spec.Configuration)
+	}
+	if config.Spec.Agent.Image == "" {
+		return fmt.Errorf("expected non-empty agent image")
+	}
+	if config.Spec.Daemon.Image == "" {
+		return fmt.Errorf("expected non-empty daemon image")
+	}
+
+	t.Logf("Config CR bootstrapped by operator with correct defaults (agent=%s, daemon=%s)",
+		config.Spec.Agent.Image, config.Spec.Daemon.Image)
+	return nil
+}
+
+// testDefaultConfigRecovery verifies that the default-config subcommand,
+// exec'd inside the running operator pod, produces valid YAML that can be
+// applied to restore the Config CR and bring all managed resources back.
+// This mirrors the documented recovery procedure:
+//
+//	kubectl exec -n bpfman deploy/bpfman-operator -- /bpfman-operator default-config | kubectl apply -f -
+func testDefaultConfigRecovery(ctx context.Context, t *testing.T) error {
+	// Confirm the Config CR is absent (deleted by the preceding cascading deletion test).
+	existing := &v1alpha1.Config{}
+	err := runtimeClient.Get(ctx, types.NamespacedName{Name: internal.BpfmanConfigName}, existing)
+	if !errors.IsNotFound(err) {
+		if err == nil {
+			return fmt.Errorf("Config CR should not exist before recovery test")
+		}
+		return err
+	}
+
+	// Set up a kubernetes client and REST config for pod exec.
+	restConfig := bpfmanHelpers.GetK8sConfigOrDie()
+	kubeClient, err := kubernetes.NewForConfig(restConfig)
+	if err != nil {
+		return fmt.Errorf("failed to create kubernetes client: %w", err)
+	}
+
+	// Find the operator pod.
+	pods, err := kubeClient.CoreV1().Pods(internal.BpfmanNamespace).List(ctx, metav1.ListOptions{
+		LabelSelector: "control-plane=controller-manager",
+	})
+	if err != nil {
+		return fmt.Errorf("failed to list operator pods: %w", err)
+	}
+	if len(pods.Items) == 0 {
+		return fmt.Errorf("no operator pods found with label control-plane=controller-manager")
+	}
+	podName := pods.Items[0].Name
+	t.Logf("Executing default-config in pod %s", podName)
+
+	// Exec /bpfman-operator default-config in the operator container.
+	req := kubeClient.CoreV1().RESTClient().Post().
+		Resource("pods").
+		Name(podName).
+		Namespace(internal.BpfmanNamespace).
+		SubResource("exec").
+		VersionedParams(&corev1.PodExecOptions{
+			Command:   []string{"/bpfman-operator", "default-config"},
+			Container: "bpfman-operator",
+			Stdout:    true,
+			Stderr:    true,
+		}, clientgoscheme.ParameterCodec)
+
+	executor, err := remotecommand.NewSPDYExecutor(restConfig, "POST", req.URL())
+	if err != nil {
+		return fmt.Errorf("failed to create SPDY executor: %w", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	if err := executor.StreamWithContext(ctx, remotecommand.StreamOptions{
+		Stdout: &stdout,
+		Stderr: &stderr,
+	}); err != nil {
+		return fmt.Errorf("default-config exec failed (stderr: %s): %w", stderr.String(), err)
+	}
+	t.Logf("default-config output:\n%s", stdout.String())
+
+	// Parse the YAML output into a Config CR and create it.
+	var recoveredConfig v1alpha1.Config
+	if err := yaml.Unmarshal(stdout.Bytes(), &recoveredConfig); err != nil {
+		return fmt.Errorf("failed to unmarshal default-config output: %w", err)
+	}
+	if err := runtimeClient.Create(ctx, &recoveredConfig); err != nil {
+		return fmt.Errorf("failed to create Config CR from default-config output: %w", err)
+	}
+	t.Logf("Created Config CR from default-config subcommand output")
+
+	// Verify the recovered Config CR has the correct default values.
+	if err := testConfigBootstrap(ctx, t, &recoveredConfig); err != nil {
+		return fmt.Errorf("recovered Config CR does not match defaults: %w", err)
+	}
+
+	// Wait for all managed resources to be recreated.
+	if err := waitForResourceCreation(ctx); err != nil {
+		return fmt.Errorf("resources did not recover after applying default-config output: %w", err)
+	}
+	t.Logf("All resources recovered via default-config subcommand")
+
+	// Clean up for the next test by deleting the Config CR.
+	return testConfigCascadingDeletion(ctx, t)
 }
 
 // testConfigStuckDeletion verifies that bpfman can handle scenarios

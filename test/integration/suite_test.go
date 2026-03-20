@@ -20,7 +20,6 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	"github.com/bpfman/bpfman-operator/apis/v1alpha1"
 	"github.com/bpfman/bpfman-operator/internal"
 	"github.com/bpfman/bpfman-operator/pkg/client/clientset"
 	bpfmanHelpers "github.com/bpfman/bpfman-operator/pkg/helpers"
@@ -44,38 +43,16 @@ var (
 	keepKustomizeDeploys = func() bool { return os.Getenv("TEST_KEEP_KUSTOMIZE_DEPLOYS") == "true" }()
 	skipBpfmanDeploy     = func() bool { return os.Getenv("SKIP_BPFMAN_DEPLOY") == "true" }()
 
+	hasMonitoring bool
+
 	cleanup = []func(context.Context) error{}
 
-	bpfmanConfig = v1alpha1.Config{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: internal.BpfmanConfigName,
-		},
-		Spec: v1alpha1.ConfigSpec{
-			Namespace: "bpfman",
-			Configuration: `[database]
-max_retries = 30
-millisec_delay = 10000
-[signing]
-allow_unsigned = true
-verify_enabled = true`,
-			Agent: v1alpha1.AgentSpec{
-				Image:           "CHANGEME",
-				LogLevel:        "info",
-				HealthProbePort: 8175,
-			},
-			Daemon: v1alpha1.DaemonSpec{
-				Image:    "quay.io/bpfman/bpfman:latest",
-				LogLevel: "bpfman=debug",
-			},
-		},
-	}
 )
 
 const (
 	bpfmanCRD              = "../../config/crd"
 	bpfmanKustomize        = "../../config/test"
 	bpfmanKustomizationEnv = "kustomization.yaml.env"
-	bpfmanConfigMap        = "../../config/bpfman-deployment/config.yaml"
 	newImageName           = "NEW_IMAGE_NAME"
 	newImageTag            = "NEW_IMAGE_TAG"
 )
@@ -135,16 +112,26 @@ func TestMain(m *testing.M) {
 	fmt.Println("INFO: Get the bpfman client")
 	bpfmanClient = bpfmanHelpers.GetClientOrDie()
 
+	// Detect whether the monitoring.coreos.com API group is present.
+	apiList, err := env.Cluster().Client().Discovery().ServerGroups()
+	exitOnErr(err)
+	for _, g := range apiList.Groups {
+		if g.Name == "monitoring.coreos.com" {
+			hasMonitoring = true
+			break
+		}
+	}
+	fmt.Printf("INFO: hasMonitoring=%v\n", hasMonitoring)
+
 	// deploy the BPFMAN Operator and relevant CRDs.
 	if !skipBpfmanDeploy {
 		// Install the CRDs, RBAC and operator-deployment first.
 		fmt.Println("INFO: deploying bpfman operator to test cluster")
 		exitOnErr(generateKustomization(bpfmanKustomize, bpfmanKustomizationEnv, bpfmanOperatorImage))
 		exitOnErr(clusters.KustomizeDeployForCluster(ctx, env.Cluster(), bpfmanKustomize))
-		// Then, deploy the Config resource.
-		bpfmanConfig.Spec.Agent.Image = bpfmanAgentImage
-		_, err := bpfmanClient.BpfmanV1alpha1().Configs().Create(ctx, &bpfmanConfig, metav1.CreateOptions{})
-		exitOnErr(err)
+		// The operator bootstraps the Config CR on startup using
+		// BPFMAN_IMG and BPFMAN_AGENT_IMG from its deployment env
+		// vars; both are required.
 		if !keepKustomizeDeploys {
 			addCleanup(func(context.Context) error {
 				ctxTimeout, cancelFunc := context.WithTimeout(ctx, 5*time.Minute)
@@ -302,14 +289,19 @@ func waitForBpfmanConfigDelete(ctx context.Context, env environments.Environment
 					},
 					msg: "INFO: bpfman daemon daemonset deleted successfully",
 				},
-				{
+			}
+			if hasMonitoring {
+				checks = append(checks, struct {
+					check func() error
+					msg   string
+				}{
 					check: func() error {
 						_, err := env.Cluster().Client().AppsV1().DaemonSets(internal.BpfmanNamespace).Get(ctx,
 							internal.BpfmanMetricsProxyDsName, metav1.GetOptions{})
 						return err
 					},
 					msg: "INFO: bpfman metrics proxy daemonset deleted successfully",
-				},
+				})
 			}
 
 			deleteCount := 0

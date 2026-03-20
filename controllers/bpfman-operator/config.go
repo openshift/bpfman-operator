@@ -26,6 +26,7 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	storagev1 "k8s.io/api/storage/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -39,9 +40,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/event"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	osv1 "github.com/openshift/api/security/v1"
+	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 
 	"github.com/bpfman/bpfman-operator/apis/v1alpha1"
@@ -52,7 +55,12 @@ import (
 // +kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=storage.k8s.io,resources=csidrivers,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=security.openshift.io,resources=securitycontextconstraints,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=bpfman.io,resources=configs,verbs=get;list;watch;update;patch;delete
+// +kubebuilder:rbac:groups=monitoring.coreos.com,resources=servicemonitors,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=core,resources=namespaces,verbs=get;list;watch;update;patch
+// +kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;update;patch
+// +kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=clusterroles;clusterrolebindings,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=roles;rolebindings,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=bpfman.io,resources=configs,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=bpfman.io,resources=configs/finalizers,verbs=update
 
 type BpfmanConfigReconciler struct {
@@ -62,12 +70,13 @@ type BpfmanConfigReconciler struct {
 	CsiDriverDS          string
 	RestrictedSCC        string
 	IsOpenshift          bool
+	HasMonitoring        bool
 }
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *BpfmanConfigReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	setup := ctrl.NewControllerManagedBy(mgr).
-		// Watch the bpfman-daemon configmap to configure the bpfman deployment across the whole cluster
+		// Watch the Config CR to configure the bpfman deployment across the whole cluster
 		For(&v1alpha1.Config{},
 			builder.WithPredicates(resourcePredicate(internal.BpfmanConfigName))).
 		Owns(&corev1.ConfigMap{},
@@ -76,9 +85,6 @@ func (r *BpfmanConfigReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			&appsv1.DaemonSet{},
 			builder.WithPredicates(resourcePredicate(internal.BpfmanDsName))).
 		Owns(
-			&appsv1.DaemonSet{},
-			builder.WithPredicates(resourcePredicate(internal.BpfmanMetricsProxyDsName))).
-		Owns(
 			&storagev1.CSIDriver{},
 			builder.WithPredicates(resourcePredicate(internal.BpfmanCsiDriverName)))
 
@@ -86,6 +92,33 @@ func (r *BpfmanConfigReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		setup = setup.Owns(
 			&osv1.SecurityContextConstraints{},
 			builder.WithPredicates(resourcePredicate(internal.BpfmanRestrictedSccName)))
+
+		if r.HasMonitoring {
+			// Watch the operator namespace so we can re-apply the
+			// cluster-monitoring label if it is removed.
+			setup = setup.Watches(
+				&corev1.Namespace{},
+				handler.EnqueueRequestsFromMapFunc(
+					func(_ context.Context, obj client.Object) []ctrl.Request {
+						if obj.GetName() != internal.BpfmanNamespace {
+							return nil
+						}
+						return []ctrl.Request{{NamespacedName: types.NamespacedName{Name: internal.BpfmanConfigName}}}
+					}),
+				builder.WithPredicates(resourcePredicate(internal.BpfmanNamespace)))
+		}
+	}
+
+	if r.HasMonitoring {
+		setup = setup.Owns(
+			&appsv1.DaemonSet{},
+			builder.WithPredicates(resourcePredicate(internal.BpfmanMetricsProxyDsName))).
+			Owns(
+				&monitoringv1.ServiceMonitor{},
+				builder.WithPredicates(resourcePredicate(internal.BpfmanAgentServiceMonitorName))).
+			Owns(
+				&monitoringv1.ServiceMonitor{},
+				builder.WithPredicates(resourcePredicate(internal.BpfmanControllerServiceMonitorName)))
 	}
 
 	return setup.Complete(r)
@@ -144,6 +177,26 @@ func (r *BpfmanConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	}
 
 	if err := r.reconcileMetricsProxyDS(ctx, bpfmanConfig); err != nil {
+		return ctrl.Result{}, err
+	}
+
+	if err := r.reconcileServiceMonitors(ctx, bpfmanConfig); err != nil {
+		return ctrl.Result{}, err
+	}
+
+	if err := r.reconcileAgentMetricsServiceAnnotation(ctx, bpfmanConfig); err != nil {
+		return ctrl.Result{}, err
+	}
+
+	if err := r.reconcileOpenShiftRBAC(ctx, bpfmanConfig); err != nil {
+		return ctrl.Result{}, err
+	}
+
+	if err := r.reconcilePrometheusRBAC(ctx, bpfmanConfig); err != nil {
+		return ctrl.Result{}, err
+	}
+
+	if err := r.reconcileNamespace(ctx, bpfmanConfig); err != nil {
 		return ctrl.Result{}, err
 	}
 
@@ -217,6 +270,10 @@ func (r *BpfmanConfigReconciler) reconcileStandardDS(ctx context.Context, bpfman
 }
 
 func (r *BpfmanConfigReconciler) reconcileMetricsProxyDS(ctx context.Context, bpfmanConfig *v1alpha1.Config) error {
+	if !r.HasMonitoring {
+		return nil
+	}
+
 	// Reconcile metrics-proxy daemonset
 	metricsProxyDS := &appsv1.DaemonSet{ObjectMeta: metav1.ObjectMeta{Name: internal.BpfmanMetricsProxyDsName}}
 	r.Logger.Info("Loading object", "object", metricsProxyDS.Name, "path", r.BpfmanMetricsProxyDS)
@@ -228,6 +285,370 @@ func (r *BpfmanConfigReconciler) reconcileMetricsProxyDS(ctx context.Context, bp
 	return assureResource(ctx, r, bpfmanConfig, metricsProxyDS, func(existing, desired *appsv1.DaemonSet) bool {
 		return !equality.Semantic.DeepEqual(existing.Spec, desired.Spec)
 	})
+}
+
+func (r *BpfmanConfigReconciler) reconcileServiceMonitors(ctx context.Context, bpfmanConfig *v1alpha1.Config) error {
+	if !r.HasMonitoring {
+		return nil
+	}
+
+	ns := bpfmanConfig.Spec.Namespace
+	httpsScheme := monitoringv1.Scheme("https")
+
+	agentTLS := serviceMonitorTLSConfig(r.IsOpenshift, "bpfman-agent-metrics-service", ns)
+	// The operator deployment always uses controller-runtime's
+	// self-signed certificates, so the controller ServiceMonitor
+	// must skip TLS verification on all platforms.
+	controllerTLS := &monitoringv1.TLSConfig{
+		SafeTLSConfig: monitoringv1.SafeTLSConfig{
+			InsecureSkipVerify: ptr.To(true),
+		},
+	}
+
+	agentSM := &monitoringv1.ServiceMonitor{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      internal.BpfmanAgentServiceMonitorName,
+			Namespace: ns,
+			Labels: map[string]string{
+				"app.kubernetes.io/component":  "metrics",
+				"app.kubernetes.io/created-by": "bpfman-operator",
+				"app.kubernetes.io/instance":   "agent-metrics-monitor",
+				"app.kubernetes.io/managed-by": "bpfman-operator",
+				"app.kubernetes.io/name":       "agent-metrics-monitor",
+				"app.kubernetes.io/part-of":    "bpfman-operator",
+			},
+		},
+		Spec: monitoringv1.ServiceMonitorSpec{
+			Endpoints: []monitoringv1.Endpoint{
+				{
+					Path:            "/agent-metrics",
+					Port:            "https-metrics",
+					Scheme:          &httpsScheme,
+					BearerTokenFile: "/var/run/secrets/kubernetes.io/serviceaccount/token",
+					HTTPConfigWithProxyAndTLSFiles: monitoringv1.HTTPConfigWithProxyAndTLSFiles{
+						HTTPConfigWithTLSFiles: monitoringv1.HTTPConfigWithTLSFiles{
+							TLSConfig: agentTLS,
+						},
+					},
+				},
+			},
+			Selector: metav1.LabelSelector{
+				MatchLabels: map[string]string{
+					"app.kubernetes.io/component": "metrics",
+					"app.kubernetes.io/instance":  "agent-metrics-service",
+					"app.kubernetes.io/name":      "agent-metrics-service",
+				},
+			},
+		},
+	}
+
+	controllerSM := &monitoringv1.ServiceMonitor{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      internal.BpfmanControllerServiceMonitorName,
+			Namespace: ns,
+			Labels: map[string]string{
+				"app.kubernetes.io/component":  "metrics",
+				"app.kubernetes.io/created-by": "bpfman-operator",
+				"app.kubernetes.io/instance":   "controller-manager-metrics-monitor",
+				"app.kubernetes.io/managed-by": "bpfman-operator",
+				"app.kubernetes.io/name":       "servicemonitor",
+				"app.kubernetes.io/part-of":    "bpfman-operator",
+				"control-plane":                "controller-manager",
+			},
+		},
+		Spec: monitoringv1.ServiceMonitorSpec{
+			Endpoints: []monitoringv1.Endpoint{
+				{
+					Path:            "/metrics",
+					Port:            "https-metrics",
+					Scheme:          &httpsScheme,
+					BearerTokenFile: "/var/run/secrets/kubernetes.io/serviceaccount/token",
+					HTTPConfigWithProxyAndTLSFiles: monitoringv1.HTTPConfigWithProxyAndTLSFiles{
+						HTTPConfigWithTLSFiles: monitoringv1.HTTPConfigWithTLSFiles{
+							TLSConfig: controllerTLS,
+						},
+					},
+				},
+			},
+			Selector: metav1.LabelSelector{
+				MatchLabels: map[string]string{
+					"control-plane": "controller-manager",
+				},
+			},
+		},
+	}
+
+	needsUpdateFn := func(existing, desired *monitoringv1.ServiceMonitor) bool {
+		return !equality.Semantic.DeepEqual(existing.Spec.Endpoints, desired.Spec.Endpoints) ||
+			!equality.Semantic.DeepEqual(existing.Spec.Selector, desired.Spec.Selector)
+	}
+
+	if err := assureResource(ctx, r, bpfmanConfig, agentSM, needsUpdateFn); err != nil {
+		return err
+	}
+	return assureResource(ctx, r, bpfmanConfig, controllerSM, needsUpdateFn)
+}
+
+// serviceMonitorTLSConfig returns the TLS configuration for a
+// ServiceMonitor endpoint. On OpenShift, the service-ca operator
+// provisions serving certificates and a trusted CA bundle, so we use
+// strict verification with the CA file and server name. On other
+// platforms we skip verification because no standard certificate
+// infrastructure exists.
+func serviceMonitorTLSConfig(isOpenshift bool, serviceName, namespace string) *monitoringv1.TLSConfig {
+	if isOpenshift {
+		return &monitoringv1.TLSConfig{
+			TLSFilesConfig: monitoringv1.TLSFilesConfig{
+				CAFile: "/etc/prometheus/configmaps/serving-certs-ca-bundle/service-ca.crt",
+			},
+			SafeTLSConfig: monitoringv1.SafeTLSConfig{
+				ServerName:         ptr.To(serviceName + "." + namespace + ".svc"),
+				InsecureSkipVerify: ptr.To(false),
+			},
+		}
+	}
+	return &monitoringv1.TLSConfig{
+		SafeTLSConfig: monitoringv1.SafeTLSConfig{
+			InsecureSkipVerify: ptr.To(true),
+		},
+	}
+}
+
+// reconcileNamespace ensures the operator namespace has the correct
+// labels and annotations. Pod security labels are set on all
+// platforms since the bpfman-daemon requires privileged containers.
+// On OpenShift, additional labels and annotations are set for
+// cluster monitoring discovery and workload partitioning.
+func (r *BpfmanConfigReconciler) reconcileNamespace(ctx context.Context, bpfmanConfig *v1alpha1.Config) error {
+	ns := bpfmanConfig.Spec.Namespace
+	namespace := &corev1.Namespace{}
+	if err := r.Client.Get(ctx, types.NamespacedName{Name: ns}, namespace); err != nil {
+		return fmt.Errorf("get namespace %s: %w", ns, err)
+	}
+
+	if namespace.Labels == nil {
+		namespace.Labels = make(map[string]string)
+	}
+	if namespace.Annotations == nil {
+		namespace.Annotations = make(map[string]string)
+	}
+
+	changed := false
+
+	// Pod security admission labels required on all platforms
+	// for the privileged bpfman-daemon containers.
+	psaLabels := map[string]string{
+		"pod-security.kubernetes.io/enforce": "privileged",
+		"pod-security.kubernetes.io/audit":   "privileged",
+		"pod-security.kubernetes.io/warn":    "privileged",
+	}
+	for k, v := range psaLabels {
+		if namespace.Labels[k] != v {
+			namespace.Labels[k] = v
+			changed = true
+		}
+	}
+
+	if r.IsOpenshift {
+		if r.HasMonitoring && namespace.Labels["openshift.io/cluster-monitoring"] != "true" {
+			namespace.Labels["openshift.io/cluster-monitoring"] = "true"
+			changed = true
+		}
+
+		osAnnotations := map[string]string{
+			"openshift.io/node-selector":     "",
+			"openshift.io/description":       "Openshift bpfman components",
+			"workload.openshift.io/allowed":  "management",
+		}
+		for k, v := range osAnnotations {
+			if namespace.Annotations[k] != v {
+				namespace.Annotations[k] = v
+				changed = true
+			}
+		}
+	}
+
+	if changed {
+		if err := r.Client.Update(ctx, namespace); err != nil {
+			return fmt.Errorf("update namespace %s: %w", ns, err)
+		}
+		r.Logger.Info("Updated namespace labels and annotations", "namespace", ns)
+	}
+
+	return nil
+}
+
+// reconcileAgentMetricsServiceAnnotation annotates the agent
+// metrics service with the OpenShift service-CA serving certificate
+// annotation, which triggers the service CA operator to provision
+// a TLS secret for the agent metrics proxy.
+func (r *BpfmanConfigReconciler) reconcileAgentMetricsServiceAnnotation(ctx context.Context, bpfmanConfig *v1alpha1.Config) error {
+	if !r.IsOpenshift {
+		return nil
+	}
+
+	ns := bpfmanConfig.Spec.Namespace
+	svc := &corev1.Service{}
+	if err := r.Client.Get(ctx, types.NamespacedName{
+		Name:      "bpfman-agent-metrics-service",
+		Namespace: ns,
+	}, svc); err != nil {
+		if errors.IsNotFound(err) {
+			return nil
+		}
+		return fmt.Errorf("get agent metrics service: %w", err)
+	}
+
+	if svc.Annotations == nil {
+		svc.Annotations = make(map[string]string)
+	}
+	if svc.Annotations["service.beta.openshift.io/serving-cert-secret-name"] != "agent-metrics-tls" {
+		svc.Annotations["service.beta.openshift.io/serving-cert-secret-name"] = "agent-metrics-tls"
+		if err := r.Client.Update(ctx, svc); err != nil {
+			return fmt.Errorf("annotate agent metrics service: %w", err)
+		}
+		r.Logger.Info("Annotated agent metrics service for service-CA cert provisioning")
+	}
+
+	return nil
+}
+
+// reconcileOpenShiftRBAC creates the RBAC resources needed for the
+// bpfman-daemon service account to use the privileged and
+// bpfman-restricted SecurityContextConstraints on OpenShift.
+func (r *BpfmanConfigReconciler) reconcileOpenShiftRBAC(ctx context.Context, bpfmanConfig *v1alpha1.Config) error {
+	if !r.IsOpenshift {
+		return nil
+	}
+
+	ns := bpfmanConfig.Spec.Namespace
+
+	// ClusterRoleBinding granting the privileged SCC to the
+	// bpfman-daemon service account.
+	privilegedCRB := &rbacv1.ClusterRoleBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "bpfman-privileged-scc",
+		},
+	}
+	if err := r.Client.Get(ctx, types.NamespacedName{Name: privilegedCRB.Name}, privilegedCRB); err != nil {
+		if !errors.IsNotFound(err) {
+			return fmt.Errorf("get ClusterRoleBinding %s: %w", privilegedCRB.Name, err)
+		}
+		privilegedCRB.RoleRef = rbacv1.RoleRef{
+			APIGroup: "rbac.authorization.k8s.io",
+			Kind:     "ClusterRole",
+			Name:     "system:openshift:scc:privileged",
+		}
+		privilegedCRB.Subjects = []rbacv1.Subject{{
+			Kind:      "ServiceAccount",
+			Name:      "bpfman-daemon",
+			Namespace: ns,
+		}}
+		if err := r.Client.Create(ctx, privilegedCRB); err != nil {
+			return fmt.Errorf("create ClusterRoleBinding %s: %w", privilegedCRB.Name, err)
+		}
+		r.Logger.Info("Created ClusterRoleBinding", "name", privilegedCRB.Name)
+	}
+
+	// ClusterRole allowing use of the bpfman-restricted SCC.
+	userCR := &rbacv1.ClusterRole{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "bpfman-user",
+		},
+	}
+	if err := r.Client.Get(ctx, types.NamespacedName{Name: userCR.Name}, userCR); err != nil {
+		if !errors.IsNotFound(err) {
+			return fmt.Errorf("get ClusterRole %s: %w", userCR.Name, err)
+		}
+		userCR.Rules = []rbacv1.PolicyRule{{
+			APIGroups:     []string{"security.openshift.io"},
+			ResourceNames: []string{"bpfman-restricted"},
+			Resources:     []string{"securitycontextconstraints"},
+			Verbs:         []string{"use"},
+		}}
+		if err := r.Client.Create(ctx, userCR); err != nil {
+			return fmt.Errorf("create ClusterRole %s: %w", userCR.Name, err)
+		}
+		r.Logger.Info("Created ClusterRole", "name", userCR.Name)
+	}
+
+	return nil
+}
+
+// reconcilePrometheusRBAC creates the RBAC resources needed for
+// the OpenShift Prometheus instance to scrape bpfman metrics
+// endpoints.
+func (r *BpfmanConfigReconciler) reconcilePrometheusRBAC(ctx context.Context, bpfmanConfig *v1alpha1.Config) error {
+	if !r.IsOpenshift || !r.HasMonitoring {
+		return nil
+	}
+
+	ns := bpfmanConfig.Spec.Namespace
+
+	// RoleBinding granting the OpenShift Prometheus SA the
+	// prometheus-k8s Role in the bpfman namespace.
+	promRB := &rbacv1.RoleBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "bpfman-prometheus-k8s",
+			Namespace: ns,
+		},
+	}
+	if err := r.Client.Get(ctx, types.NamespacedName{Name: promRB.Name, Namespace: ns}, promRB); err != nil {
+		if !errors.IsNotFound(err) {
+			return fmt.Errorf("get RoleBinding %s: %w", promRB.Name, err)
+		}
+		promRB.RoleRef = rbacv1.RoleRef{
+			APIGroup: "rbac.authorization.k8s.io",
+			Kind:     "Role",
+			Name:     "bpfman-prometheus-k8s",
+		}
+		promRB.Subjects = []rbacv1.Subject{{
+			Kind:      "ServiceAccount",
+			Name:      "prometheus-k8s",
+			Namespace: "openshift-monitoring",
+		}}
+		if err := r.Client.Create(ctx, promRB); err != nil {
+			return fmt.Errorf("create RoleBinding %s: %w", promRB.Name, err)
+		}
+		r.Logger.Info("Created RoleBinding", "name", promRB.Name)
+	}
+
+	// ClusterRoleBinding granting the OpenShift Prometheus SA
+	// the metrics-reader ClusterRole.
+	metricsReaderCRB := &rbacv1.ClusterRoleBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "bpfman-prometheus-metrics-reader",
+			Labels: map[string]string{
+				"app.kubernetes.io/component":  "metrics",
+				"app.kubernetes.io/created-by": "bpfman-operator",
+				"app.kubernetes.io/instance":   "prometheus-metrics-reader",
+				"app.kubernetes.io/managed-by": "bpfman-operator",
+				"app.kubernetes.io/name":       "clusterrolebinding",
+				"app.kubernetes.io/part-of":    "bpfman-operator",
+			},
+		},
+	}
+	if err := r.Client.Get(ctx, types.NamespacedName{Name: metricsReaderCRB.Name}, metricsReaderCRB); err != nil {
+		if !errors.IsNotFound(err) {
+			return fmt.Errorf("get ClusterRoleBinding %s: %w", metricsReaderCRB.Name, err)
+		}
+		metricsReaderCRB.RoleRef = rbacv1.RoleRef{
+			APIGroup: "rbac.authorization.k8s.io",
+			Kind:     "ClusterRole",
+			Name:     "bpfman-metrics-reader",
+		}
+		metricsReaderCRB.Subjects = []rbacv1.Subject{{
+			Kind:      "ServiceAccount",
+			Name:      "prometheus-k8s",
+			Namespace: "openshift-monitoring",
+		}}
+		if err := r.Client.Create(ctx, metricsReaderCRB); err != nil {
+			return fmt.Errorf("create ClusterRoleBinding %s: %w", metricsReaderCRB.Name, err)
+		}
+		r.Logger.Info("Created ClusterRoleBinding", "name", metricsReaderCRB.Name)
+	}
+
+	return nil
 }
 
 // resourcePredicate creates a predicate that filters events based on resource name.

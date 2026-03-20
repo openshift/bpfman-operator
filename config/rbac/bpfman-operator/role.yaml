@@ -19,6 +19,17 @@ rules:
 - apiGroups:
   - ""
   resources:
+  - namespaces
+  - services
+  verbs:
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - ""
+  resources:
   - nodes
   verbs:
   - get
@@ -41,6 +52,7 @@ rules:
   resources:
   - bpfapplications
   - clusterbpfapplications
+  - configs
   verbs:
   - create
   - delete
@@ -76,10 +88,26 @@ rules:
   - list
   - watch
 - apiGroups:
-  - bpfman.io
+  - monitoring.coreos.com
   resources:
-  - configs
+  - servicemonitors
   verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - rbac.authorization.k8s.io
+  resources:
+  - clusterrolebindings
+  - clusterroles
+  - rolebindings
+  - roles
+  verbs:
+  - create
   - delete
   - get
   - list
