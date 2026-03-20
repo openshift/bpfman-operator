@@ -153,6 +153,21 @@ def main():
         # Update metadata.name to match version (pattern: bpfman-operator.v<version>)
         bpfman_operator_csv["metadata"]["name"] = f"bpfman-operator.v{version}"
 
+    # Patch BPFMAN_IMG and BPFMAN_AGENT_IMG environment variables in the
+    # operator deployment spec. The operator bootstraps its Config CR from
+    # these env vars at startup -- there is no Config CR in the bundle.
+    if args.agent_pullspec or args.bpfman_pullspec:
+        deployments = bpfman_operator_csv.get("spec", {}).get("install", {}).get("spec", {}).get("deployments", [])
+        for deployment in deployments:
+            containers = deployment.get("spec", {}).get("template", {}).get("spec", {}).get("containers", [])
+            for container in containers:
+                env_list = container.get("env", [])
+                for env_var in env_list:
+                    if env_var["name"] == "BPFMAN_IMG" and args.bpfman_pullspec:
+                        env_var["value"] = args.bpfman_pullspec.strip()
+                    elif env_var["name"] == "BPFMAN_AGENT_IMG" and args.agent_pullspec:
+                        env_var["value"] = args.agent_pullspec.strip()
+
     # Build relatedImages section for disconnected environment support.
     # OLM uses this to determine which images need to be mirrored.
     related_images = []
