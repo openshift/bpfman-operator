@@ -1,1 +1,1 @@
-registry.redhat.io/bpfman/bpfman-rhel9-operator@sha256:a5c7331d0bd52aa7db0f2f26241e9b5db8fb1fba04eb2220d2f812b455846b8e
+quay.io/redhat-user-workloads/ocp-bpfman-tenant/bpfman-operator-ystream@sha256:fe3071e9e267d2986200f616d1b3d1a1585ac99ce03c6cf6fdbc61cbe238ce4c
