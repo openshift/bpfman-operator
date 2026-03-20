@@ -994,7 +994,7 @@ metadata:
     capabilities: Basic Install
     categories: OpenShift Optional
     containerImage: quay.io/bpfman/bpfman-operator:latest
-    createdAt: "2025-06-03T12:16:50Z"
+    createdAt: "2026-03-20T12:22:58Z"
     description: The bpfman Operator is designed to manage eBPF programs for applications.
     features.operators.openshift.io/cnf: "false"
     features.operators.openshift.io/cni: "false"
@@ -1035,7 +1035,7 @@ metadata:
     operatorframework.io/arch.arm64: supported
     operatorframework.io/arch.ppc64le: supported
     operatorframework.io/arch.s390x: supported
-  name: bpfman-operator.v0.5.7-dev
+  name: bpfman-operator.v0.6.0
   namespace: placeholder
 spec:
   apiservicedefinitions: {}
@@ -1062,6 +1062,9 @@ spec:
       displayName: Cluster Bpf Application State
       kind: ClusterBpfApplicationState
       name: clusterbpfapplicationstates.bpfman.io
+      version: v1alpha1
+    - kind: Config
+      name: configs.bpfman.io
       version: v1alpha1
   description: "The bpfman Operator is a Kubernetes Operator for deploying [bpfman](https://bpfman.netlify.app/),
     a system daemon\nfor managing eBPF programs. It deploys bpfman itself along with
@@ -1385,6 +1388,37 @@ spec:
       clusterPermissions:
       - rules:
         - apiGroups:
+          - ""
+          resources:
+          - configmaps
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - ""
+          resources:
+          - namespaces
+          - services
+          verbs:
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - ""
+          resources:
+          - nodes
+          verbs:
+          - get
+          - list
+          - watch
+        - apiGroups:
           - apps
           resources:
           - daemonsets
@@ -1400,6 +1434,8 @@ spec:
           - bpfman.io
           resources:
           - bpfapplications
+          - clusterbpfapplications
+          - configs
           verbs:
           - create
           - delete
@@ -1412,12 +1448,15 @@ spec:
           - bpfman.io
           resources:
           - bpfapplications/finalizers
+          - clusterbpfapplications/finalizers
+          - configs/finalizers
           verbs:
           - update
         - apiGroups:
           - bpfman.io
           resources:
           - bpfapplications/status
+          - clusterbpfapplications/status
           verbs:
           - get
           - patch
@@ -1426,14 +1465,15 @@ spec:
           - bpfman.io
           resources:
           - bpfapplicationstates
+          - clusterbpfapplicationstates
           verbs:
           - get
           - list
           - watch
         - apiGroups:
-          - bpfman.io
+          - monitoring.coreos.com
           resources:
-          - clusterbpfapplications
+          - servicemonitors
           verbs:
           - create
           - delete
@@ -1443,49 +1483,19 @@ spec:
           - update
           - watch
         - apiGroups:
-          - bpfman.io
+          - rbac.authorization.k8s.io
           resources:
-          - clusterbpfapplications/finalizers
-          verbs:
-          - update
-        - apiGroups:
-          - bpfman.io
-          resources:
-          - clusterbpfapplications/status
-          verbs:
-          - get
-          - patch
-          - update
-        - apiGroups:
-          - bpfman.io
-          resources:
-          - clusterbpfapplicationstates
-          verbs:
-          - get
-          - list
-          - watch
-        - apiGroups:
-          - bpfman.io
-          resources:
-          - configmaps/finalizers
-          verbs:
-          - update
-        - apiGroups:
-          - ""
-          resources:
-          - configmaps
+          - clusterrolebindings
+          - clusterroles
+          - rolebindings
+          - roles
           verbs:
           - create
+          - delete
           - get
           - list
-          - watch
-        - apiGroups:
-          - ""
-          resources:
-          - nodes
-          verbs:
-          - get
-          - list
+          - patch
+          - update
           - watch
         - apiGroups:
           - security.openshift.io
@@ -1496,6 +1506,8 @@ spec:
           - delete
           - get
           - list
+          - patch
+          - update
           - watch
         - apiGroups:
           - storage.k8s.io
@@ -1506,6 +1518,8 @@ spec:
           - delete
           - get
           - list
+          - patch
+          - update
           - watch
         serviceAccountName: bpfman-operator
       deployments:
@@ -1528,7 +1542,6 @@ spec:
             metadata:
               annotations:
                 kubectl.kubernetes.io/default-container: manager
-                service.beta.openshift.io/serving-cert-secret-name: controller-manager-metrics-tls
               labels:
                 control-plane: controller-manager
             spec:
@@ -1559,6 +1572,10 @@ spec:
                 env:
                 - name: GO_LOG
                   value: info
+                - name: BPFMAN_IMG
+                  value: quay.io/bpfman/bpfman:latest
+                - name: BPFMAN_AGENT_IMG
+                  value: quay.io/bpfman/bpfman-agent:latest
                 image: quay.io/bpfman/bpfman-operator:latest
                 imagePullPolicy: IfNotPresent
                 livenessProbe:
@@ -1590,18 +1607,10 @@ spec:
                   capabilities:
                     drop:
                     - ALL
-                volumeMounts:
-                - mountPath: /tmp/k8s-webhook-server/serving-certs
-                  name: controller-manager-metrics-tls
-                  readOnly: true
               securityContext:
                 runAsNonRoot: true
               serviceAccountName: bpfman-operator
               terminationGracePeriodSeconds: 10
-              volumes:
-              - name: controller-manager-metrics-tls
-                secret:
-                  secretName: controller-manager-metrics-tls
       permissions:
       - rules:
         - apiGroups:
@@ -1696,4 +1705,4 @@ spec:
   provider:
     name: The bpfman Community
     url: https://bpfman.io/
-  version: 0.5.7-dev
+  version: 0.6.0

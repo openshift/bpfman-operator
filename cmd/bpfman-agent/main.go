@@ -23,16 +23,20 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
 	bpfmaniov1alpha1 "github.com/bpfman/bpfman-operator/apis/v1alpha1"
 	bpfmanagent "github.com/bpfman/bpfman-operator/controllers/bpfman-agent"
+	"github.com/bpfman/bpfman-operator/internal/bpffs"
 	"github.com/bpfman/bpfman-operator/internal/conn"
 	gobpfman "github.com/bpfman/bpfman/clients/gobpfman/v1"
 
 	"github.com/go-logr/logr"
+	"github.com/netobserv/netobserv-ebpf-agent/pkg/config"
 	"github.com/netobserv/netobserv-ebpf-agent/pkg/ifaces"
+	netobservmetrics "github.com/netobserv/netobserv-ebpf-agent/pkg/metrics"
 	"go.uber.org/zap/zapcore"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc/credentials/insecure"
@@ -69,6 +73,59 @@ func init() {
 	//+kubebuilder:scaffold:scheme
 }
 
+// handleMountBPFFS performs the --mount-bpffs logic. It returns
+// (exitCode, message, err).
+func handleMountBPFFS(mountInfoPath, mountPoint string, remount bool) (int, string, error) {
+	if !remount {
+		mounted, err := bpffs.IsMounted(mountInfoPath, mountPoint)
+		if err != nil {
+			return 1, "", fmt.Errorf("failed to check mount status at %s: %w", mountPoint, err)
+		}
+		if mounted {
+			return 0, fmt.Sprintf("bpffs already mounted at %s\n", mountPoint), nil
+		}
+
+		if err := bpffs.Mount(mountPoint); err != nil {
+			// Handle race: another process may have mounted
+			// between our check and mount attempt.
+			mounted, mErr := bpffs.IsMounted(mountInfoPath, mountPoint)
+			if mErr == nil && mounted {
+				return 0, fmt.Sprintf("bpffs already mounted at %s\n", mountPoint), nil
+			}
+			return 1, "", fmt.Errorf("failed to mount bpffs at %s: %w", mountPoint, err)
+		}
+		return 0, fmt.Sprintf("bpffs mounted at %s\n", mountPoint), nil
+	}
+
+	// Remount mode: exercise Mount() code path.
+	mounted, err := bpffs.IsMounted(mountInfoPath, mountPoint)
+	if err != nil {
+		return 1, "", fmt.Errorf("failed to check mount status at %s: %w", mountPoint, err)
+	}
+
+	var msg strings.Builder
+	if mounted {
+		if err := bpffs.Unmount(mountPoint); err != nil {
+			return 1, "", fmt.Errorf("failed to unmount bpffs at %s: %w", mountPoint, err)
+		}
+		fmt.Fprintf(&msg, "bpffs unmounted at %s\n", mountPoint)
+	}
+
+	if err := bpffs.Mount(mountPoint); err != nil {
+		// Handle race: another process may have mounted
+		// between our check and mount attempt.
+		mounted, mErr := bpffs.IsMounted(mountInfoPath, mountPoint)
+		if mErr == nil && mounted {
+			fmt.Fprintf(&msg, "bpffs already mounted at %s\n", mountPoint)
+			return 0, msg.String(), nil
+		}
+		return 1, "", fmt.Errorf("failed to mount bpffs at %s: %w", mountPoint, err)
+	}
+
+	fmt.Fprintf(&msg, "bpffs mounted at %s\n", mountPoint)
+	return 0, msg.String(), nil
+}
+
 // agentMetricsServer provides an HTTP server for exposing Prometheus
 // metrics on a Unix domain socket.
 //
@@ -102,8 +159,12 @@ type interfaceDiscovery struct {
 //
 // Returns an error if the subscription to interface events fails.
 func newInterfaceDiscovery(ctx context.Context, interfaces *sync.Map) (*interfaceDiscovery, error) {
-	informer := ifaces.NewWatcher(buffersLength)
-	registerer := ifaces.NewRegisterer(informer, buffersLength)
+	m := netobservmetrics.NoOp()
+	informer := ifaces.NewWatcher(buffersLength, m)
+	registerer, err := ifaces.NewRegisterer(informer, &config.Agent{BuffersLength: buffersLength}, m)
+	if err != nil {
+		return nil, fmt.Errorf("creating interface registerer: %w", err)
+	}
 
 	ifaceEvents, err := registerer.Subscribe(ctx)
 	if err != nil {
@@ -317,8 +378,26 @@ func main() {
 	flag.StringVar(&pprofAddr, "profiling-bind-address", "", "The address the profiling endpoint binds to, such as ':6060'. Leave unset to disable profiling.")
 	flag.BoolVar(&enableInterfacesDiscovery, "enable-interfaces-discovery", true, "Enable ebpfman agent process to auto detect interfaces creation and deletion")
 	flag.StringVar(&certDir, "cert-dir", "/tmp/k8s-webhook-server/serving-certs", "The directory containing TLS certificates for HTTPS servers.")
+	mountBPFFS := flag.Bool("mount-bpffs", false, "Ensure bpffs is mounted at the given path, then exit (init-container mode).")
+	mountBPFFSPath := flag.String("mount-bpffs-path", bpffs.DefaultMountPoint, "Path where bpffs should be mounted.")
+	remountBPFFS := flag.Bool("mount-bpffs-remount", false, "Unmount bpffs if mounted, then mount it (testing only).")
 
 	flag.Parse()
+
+	// Handle --mount-bpffs mode: mount bpffs if needed and exit.
+	// This is used by init containers to ensure bpffs is mounted
+	// before the main containers start, without requiring
+	// external utilities.
+	if *mountBPFFS {
+		code, out, err := handleMountBPFFS(bpffs.DefaultMountInfoPath, *mountBPFFSPath, *remountBPFFS)
+		if out != "" {
+			fmt.Print(out)
+		}
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		}
+		os.Exit(code)
+	}
 
 	// Get the Log level for bpfman deployment where this pod is running.
 	logLevel := os.Getenv("GO_LOG")
@@ -395,6 +474,7 @@ func main() {
 		NodeName:     nodeName,
 		Containers:   containerGetter,
 		Interfaces:   &sync.Map{},
+		NetNsCache:   &bpfmanagent.ReconcilerNetNsCache{},
 	}
 
 	if err = (&bpfmanagent.ClBpfApplicationReconciler{
