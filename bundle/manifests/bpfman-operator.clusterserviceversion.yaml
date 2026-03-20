@@ -994,7 +994,7 @@ metadata:
     capabilities: Basic Install
     categories: OpenShift Optional
     containerImage: quay.io/bpfman/bpfman-operator:latest
-    createdAt: "2026-03-18T09:24:33Z"
+    createdAt: "2026-03-19T18:20:23Z"
     description: The bpfman Operator is designed to manage eBPF programs for applications.
     features.operators.openshift.io/cnf: "false"
     features.operators.openshift.io/cni: "false"
@@ -1402,6 +1402,17 @@ spec:
         - apiGroups:
           - ""
           resources:
+          - namespaces
+          - services
+          verbs:
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - ""
+          resources:
           - nodes
           verbs:
           - get
@@ -1460,6 +1471,33 @@ spec:
           - list
           - watch
         - apiGroups:
+          - monitoring.coreos.com
+          resources:
+          - servicemonitors
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - rbac.authorization.k8s.io
+          resources:
+          - clusterrolebindings
+          - clusterroles
+          - rolebindings
+          - roles
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
           - security.openshift.io
           resources:
           - securitycontextconstraints
@@ -1504,7 +1542,6 @@ spec:
             metadata:
               annotations:
                 kubectl.kubernetes.io/default-container: manager
-                service.beta.openshift.io/serving-cert-secret-name: controller-manager-metrics-tls
               labels:
                 control-plane: controller-manager
             spec:
@@ -1570,18 +1607,10 @@ spec:
                   capabilities:
                     drop:
                     - ALL
-                volumeMounts:
-                - mountPath: /tmp/k8s-webhook-server/serving-certs
-                  name: controller-manager-metrics-tls
-                  readOnly: true
               securityContext:
                 runAsNonRoot: true
               serviceAccountName: bpfman-operator
               terminationGracePeriodSeconds: 10
-              volumes:
-              - name: controller-manager-metrics-tls
-                secret:
-                  secretName: controller-manager-metrics-tls
       permissions:
       - rules:
         - apiGroups:
