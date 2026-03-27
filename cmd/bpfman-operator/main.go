@@ -17,27 +17,31 @@ limitations under the License.
 package main
 
 import (
+	"context"
 	"crypto/tls"
+	"encoding/json"
 	"flag"
+	"fmt"
 	"os"
 	"path/filepath"
 
 	bpfmaniov1alpha1 "github.com/bpfman/bpfman-operator/apis/v1alpha1"
 	bpfmanoperator "github.com/bpfman/bpfman-operator/controllers/bpfman-operator"
 	"github.com/bpfman/bpfman-operator/internal"
+	"github.com/bpfman/bpfman-operator/internal/version"
 
 	osv1 "github.com/openshift/api/security/v1"
+	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	"go.uber.org/zap/zapcore"
-	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/fields"
+	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/discovery"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
-	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/certwatcher"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
@@ -45,6 +49,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/metrics/filters"
 	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
+	"sigs.k8s.io/yaml"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -57,41 +62,23 @@ func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(bpfmaniov1alpha1.Install(scheme))
 	utilruntime.Must(osv1.Install(scheme))
+	utilruntime.Must(monitoringv1.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
 }
 
-// Returns true if the current platform is Openshift.
-func isOpenshift(client discovery.DiscoveryInterface, _ *rest.Config) (bool, error) {
-	k8sVersion, err := client.ServerVersion()
-	if err != nil {
-		setupLog.Info("issue occurred while fetching ServerVersion")
-		return false, err
-	}
-
-	setupLog.Info("detected platform version", "PlatformVersion", k8sVersion)
-	apiList, err := client.ServerGroups()
-	if err != nil {
-		setupLog.Info("issue occurred while fetching ServerGroups")
-		return false, err
-	}
-
-	for _, v := range apiList.Groups {
-		if v.Name == "route.openshift.io" {
-			setupLog.Info("route.openshift.io found in apis, platform is OpenShift")
-			return true, nil
-		}
-	}
-	return false, nil
-}
-
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "default-config" {
+		printDefaultConfig()
+		return
+	}
+
 	var metricsAddr string
 	var enableLeaderElection bool
 	var probeAddr string
 	var opts zap.Options
 	var enableHTTP2 bool
 	var certDir string
-
+	var showVersion bool
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8443", "The address the metric endpoint binds to. Use \"0\" to disable.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8175", "The address the probe endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
@@ -99,7 +86,24 @@ func main() {
 			"Enabling this will ensure there is only one active controller manager.")
 	flag.BoolVar(&enableHTTP2, "enable-http2", enableHTTP2, "If HTTP/2 should be enabled for the metrics and webhook servers.")
 	flag.StringVar(&certDir, "cert-dir", "/tmp/k8s-webhook-server/serving-certs", "The directory containing TLS certificates for HTTPS servers.")
+	flag.BoolVar(&showVersion, "version", false, "Print version information and exit.")
 	flag.Parse()
+
+	if showVersion {
+		fmt.Println(version.String())
+		return
+	}
+
+	bpfmanImage := os.Getenv("BPFMAN_IMG")
+	if bpfmanImage == "" {
+		setupLog.Error(nil, "BPFMAN_IMG environment variable must be set")
+		os.Exit(1)
+	}
+	bpfmanAgentImage := os.Getenv("BPFMAN_AGENT_IMG")
+	if bpfmanAgentImage == "" {
+		setupLog.Error(nil, "BPFMAN_AGENT_IMG environment variable must be set")
+		os.Exit(1)
+	}
 
 	// Get the Log level for bpfman deployment where this pod is running
 	logLevel := os.Getenv("GO_LOG")
@@ -131,6 +135,8 @@ func main() {
 	}
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
+
+	setupLog.Info("bpfman-operator", "version", version.Version(), "commit", version.Commit(), "date", version.Date(), "go", version.GoVersion(), "platform", version.Platform())
 
 	metricsOptions := server.Options{
 		BindAddress:    metricsAddr,
@@ -165,13 +171,6 @@ func main() {
 		// if you are doing or is intended to do any operation such as perform cleanups
 		// after the manager stops then its usage might be unsafe.
 		// LeaderElectionReleaseOnCancel: true,
-		Cache: cache.Options{
-			ByObject: map[client.Object]cache.ByObject{
-				&corev1.ConfigMap{}: {
-					Field: fields.SelectorFromSet(fields.Set{"metadata.name": internal.BpfmanConfigName}),
-				},
-			},
-		},
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
@@ -212,20 +211,25 @@ func main() {
 		os.Exit(1)
 	}
 
-	isOpenshift, err := isOpenshift(dc, mgr.GetConfig())
+	isOpenshift, err := internal.IsOpenShift(dc, setupLog)
 	if err != nil {
 		setupLog.Error(err, "unable to determine platform")
 		os.Exit(1)
+	}
 
+	hasMonitoring, err := internal.HasMonitoringAPI(dc, setupLog)
+	if err != nil {
+		setupLog.Error(err, "unable to determine monitoring API availability")
+		os.Exit(1)
 	}
 
 	if err = (&bpfmanoperator.BpfmanConfigReconciler{
 		ClusterApplicationReconciler: commonClusterApp,
-		BpfmanStandardDeployment:     internal.BpfmanDaemonManifestPath,
-		BpfmanMetricsProxyDeployment: internal.BpfmanMetricsProxyPath,
-		CsiDriverDeployment:          internal.BpfmanCsiDriverPath,
-		RestrictedSCC:                internal.BpfmanRestrictedSCCPath,
+		BpfmanStandardDS:             internal.BpfmanDaemonManifestPath,
+		BpfmanMetricsProxyDS:         internal.BpfmanMetricsProxyPath,
+		CsiDriverDS:                  internal.BpfmanCsiDriverPath,
 		IsOpenshift:                  isOpenshift,
+		HasMonitoring:                hasMonitoring,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create bpfmanConfig controller")
 		os.Exit(1)
@@ -256,6 +260,11 @@ func main() {
 		os.Exit(1)
 	}
 
+	if err := ensureDefaultConfig(mgr, bpfmanImage, bpfmanAgentImage); err != nil {
+		setupLog.Error(err, "unable to ensure default Config CR")
+		os.Exit(1)
+	}
+
 	setupLog.Info("starting manager")
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
 		setupLog.Error(err, "problem running manager")
@@ -283,4 +292,94 @@ func setupCertWatcher(certDir string, tlsOpts *[]func(*tls.Config)) *certwatcher
 
 	setupLog.Info("Certificate watcher configured for metrics TLS", "certPath", certPath)
 	return certWatcher
+}
+
+// defaultConfig builds a Config CR from the given image references
+// and compiled defaults. It is used both for bootstrapping the CR on
+// startup and for the default-config subcommand.
+func defaultConfig(bpfmanImage, bpfmanAgentImage string) *bpfmaniov1alpha1.Config {
+	return &bpfmaniov1alpha1.Config{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "bpfman.io/v1alpha1",
+			Kind:       "Config",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: internal.BpfmanConfigName,
+		},
+		Spec: bpfmaniov1alpha1.ConfigSpec{
+			Namespace:     internal.DefaultConfigNamespace,
+			Configuration: internal.DefaultConfiguration,
+			Agent: bpfmaniov1alpha1.AgentSpec{
+				Image:           bpfmanAgentImage,
+				LogLevel:        internal.DefaultLogLevel,
+				HealthProbePort: internal.DefaultHealthProbePort,
+			},
+			Daemon: bpfmaniov1alpha1.DaemonSpec{
+				Image:    bpfmanImage,
+				LogLevel: internal.DefaultLogLevel,
+			},
+		},
+	}
+}
+
+// printDefaultConfig writes the default Config CR as YAML to stdout
+// using BPFMAN_IMG and BPFMAN_AGENT_IMG from the environment. Usage:
+//
+//	kubectl exec -n bpfman deploy/bpfman-operator -- /bpfman-operator default-config | kubectl apply -f -
+func printDefaultConfig() {
+	bpfmanImage := os.Getenv("BPFMAN_IMG")
+	if bpfmanImage == "" {
+		fmt.Fprintln(os.Stderr, "BPFMAN_IMG environment variable must be set")
+		os.Exit(1)
+	}
+	bpfmanAgentImage := os.Getenv("BPFMAN_AGENT_IMG")
+	if bpfmanAgentImage == "" {
+		fmt.Fprintln(os.Stderr, "BPFMAN_AGENT_IMG environment variable must be set")
+		os.Exit(1)
+	}
+	config := defaultConfig(bpfmanImage, bpfmanAgentImage)
+
+	data, err := json.Marshal(config)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error marshalling config: %v\n", err)
+		os.Exit(1)
+	}
+
+	out, err := yaml.JSONToYAML(data)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error converting to YAML: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Print(string(out))
+}
+
+// ensureDefaultConfig creates a default Config CR if one does not
+// already exist. This allows the operator to be self-sufficient when
+// deployed via OLM, where custom resource instances cannot be shipped
+// in the bundle. The image references are sourced from environment
+// variables (BPFMAN_IMG, BPFMAN_AGENT_IMG), both of which are
+// required; the operator exits on startup if either is missing.
+func ensureDefaultConfig(mgr ctrl.Manager, bpfmanImage, bpfmanAgentImage string) error {
+	directClient, err := client.New(mgr.GetConfig(), client.Options{Scheme: scheme})
+	if err != nil {
+		return err
+	}
+
+	ctx := context.Background()
+	existing := &bpfmaniov1alpha1.Config{}
+	err = directClient.Get(ctx, types.NamespacedName{Name: internal.BpfmanConfigName}, existing)
+	if err == nil {
+		setupLog.Info("Config CR already exists, skipping creation", "name", internal.BpfmanConfigName)
+		return nil
+	}
+	if !errors.IsNotFound(err) {
+		return err
+	}
+
+	config := defaultConfig(bpfmanImage, bpfmanAgentImage)
+
+	setupLog.Info("Creating default Config CR", "name", internal.BpfmanConfigName,
+		"bpfmanImage", bpfmanImage, "bpfmanAgentImage", bpfmanAgentImage)
+	return directClient.Create(ctx, config)
 }
