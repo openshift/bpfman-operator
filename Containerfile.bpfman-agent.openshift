@@ -16,7 +16,7 @@ ARG BUILDPLATFORM
 # Build metadata passed from the caller so that every platform in a
 # multi-arch build gets identical version strings.  When not supplied
 # (e.g. a plain "podman build") the values are computed locally.
-ARG BUILD_VERSION
+ARG BUILD_VERSION=${BUILDVERSION}
 ARG BUILD_COMMIT
 ARG BUILD_DATE
 
