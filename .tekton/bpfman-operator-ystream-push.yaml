@@ -35,6 +35,9 @@ spec:
     value: Containerfile.bpfman-operator.openshift
   - name: build-args-file
     value: OPENSHIFT-VERSION
+  - name: build-args
+    value:
+    - BUILD_COMMIT={{revision}}
   - name: hermetic
     value: 'true'
   pipelineRef:

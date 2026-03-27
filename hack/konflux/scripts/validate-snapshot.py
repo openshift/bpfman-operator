@@ -2,7 +2,7 @@
 """
 Validate that a Konflux snapshot is self-consistent for OLM bundle releases.
 
-Checks that all component SHAs referenced inside the bundle (CSV + ConfigMap)
+Checks that all component SHAs referenced inside the bundle CSV
 match the component SHAs actually present in the snapshot.
 
 Usage:
@@ -57,7 +57,14 @@ def parse_snapshot(snapshot_json):
 
 
 def extract_bundle_refs(bundle_image):
-    """Extract component SHAs referenced in bundle CSV and ConfigMap."""
+    """Extract component SHAs referenced in the bundle CSV.
+
+    The operator image is found via its pullspec in the CSV. The agent
+    and daemon images are found in the BPFMAN_AGENT_IMG and BPFMAN_IMG
+    environment variables on the operator deployment spec. There is no
+    Config CR in the bundle -- the operator bootstraps it at startup
+    from these env vars.
+    """
     # Create temporary directory for extraction
     with tempfile.TemporaryDirectory() as tmpdir:
         manifests_dir = os.path.join(tmpdir, "manifests")
@@ -80,23 +87,26 @@ def extract_bundle_refs(bundle_image):
         with open(csv_path) as f:
             csv_content = f.read()
 
-        # Read ConfigMap
-        cm_path = os.path.join(manifests_dir, "bpfman-config_v1_configmap.yaml")
-        with open(cm_path) as f:
-            cm_content = f.read()
-
-    # Parse operator SHA from CSV (in relatedImages)
+    # Parse operator SHA from CSV (operator image pullspec)
     operator_match = re.search(
         r"registry\.redhat\.io/bpfman/bpfman-rhel9-operator@(sha256:[a-f0-9]+)",
         csv_content,
     )
     operator_sha = operator_match.group(1) if operator_match else None
 
-    # Parse agent/daemon SHAs from ConfigMap
-    agent_match = re.search(r"bpfman\.agent\.image:.*@(sha256:[a-f0-9]+)", cm_content)
+    # Parse agent and daemon SHAs from the deployment env vars in the
+    # CSV. The operator bootstraps its Config CR from BPFMAN_IMG and
+    # BPFMAN_AGENT_IMG at startup.
+    agent_match = re.search(
+        r"name:\s*BPFMAN_AGENT_IMG\s*\n\s*value:\s*\S+@(sha256:[a-f0-9]+)",
+        csv_content,
+    )
     agent_sha = agent_match.group(1) if agent_match else None
 
-    daemon_match = re.search(r"bpfman\.image:.*@(sha256:[a-f0-9]+)", cm_content)
+    daemon_match = re.search(
+        r"name:\s*BPFMAN_IMG\s*\n\s*value:\s*\S+@(sha256:[a-f0-9]+)",
+        csv_content,
+    )
     daemon_sha = daemon_match.group(1) if daemon_match else None
 
     return {
@@ -104,7 +114,6 @@ def extract_bundle_refs(bundle_image):
         "agent": agent_sha,
         "daemon": daemon_sha,
         "csv_content": csv_content,
-        "cm_content": cm_content,
     }
 
 
@@ -158,9 +167,9 @@ def validate_snapshot(snapshot_json):
         return 2
 
     print("Bundle references:")
-    print(f"  CSV Operator:     {refs['operator']}")
-    print(f"  ConfigMap Agent:  {refs['agent']}")
-    print(f"  ConfigMap Daemon: {refs['daemon']}")
+    print(f"  CSV Operator: {refs['operator']}")
+    print(f"  CSV Agent:    {refs['agent']}")
+    print(f"  CSV Daemon:   {refs['daemon']}")
     print()
 
     # Compare
@@ -182,7 +191,7 @@ def validate_snapshot(snapshot_json):
         successes += 1
 
     if refs["agent"] is None:
-        print("FAIL: Could not extract agent reference from ConfigMap")
+        print("FAIL: Could not extract agent reference from CSV env vars")
         failures += 1
     elif refs["agent"] != components[agent_key]["sha"]:
         print("FAIL: Agent mismatch")
@@ -194,7 +203,7 @@ def validate_snapshot(snapshot_json):
         successes += 1
 
     if refs["daemon"] is None:
-        print("FAIL: Could not extract daemon reference from ConfigMap")
+        print("FAIL: Could not extract daemon reference from CSV env vars")
         failures += 1
     elif refs["daemon"] != components[daemon_key]["sha"]:
         print("FAIL: Daemon mismatch")
