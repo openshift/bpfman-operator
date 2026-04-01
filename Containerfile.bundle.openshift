@@ -73,6 +73,7 @@ RUN echo "=== Verifying bundle transformation ===" && \
 FROM scratch
 
 ARG BUILDVERSION
+ARG CPE_VERSION
 
 # Core bundle labels.
 LABEL operators.operatorframework.io.bundle.mediatype.v1=registry+v1
@@ -99,6 +100,7 @@ LABEL name="bpfman/bpfman-operator-bundle" \
       maintainer="support@redhat.com" \
       version=$BUILDVERSION \
       release=$BUILDVERSION \
+      cpe="cpe:/a:redhat:openshift_bpfman_operator:${CPE_VERSION}::el9" \
       url="https://github.com/openshift/bpfman-operator" \
       vendor="Red Hat, Inc." \
       summary="Bpfman Operator Bundle"

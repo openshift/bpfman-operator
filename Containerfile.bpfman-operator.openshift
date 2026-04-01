@@ -72,6 +72,7 @@ RUN : "${BUILD_VERSION:=$(git describe --tags --dirty --always --long 2>/dev/nul
 FROM --platform=$TARGETPLATFORM registry.access.redhat.com/ubi9/ubi-minimal:9.7-1773939694
 
 ARG BUILDVERSION
+ARG CPE_VERSION
 # The following ARGs are set internally by docker or podman on multiarch builds
 ARG TARGETPLATFORM
 
@@ -91,6 +92,7 @@ LABEL name="bpfman/bpfman-rhel9-operator" \
       io.openshift.tags="bpfman-operator" \
       maintainer="support@redhat.com" \
       version=$BUILDVERSION \
+      cpe="cpe:/a:redhat:openshift_bpfman_operator:${CPE_VERSION}::el9" \
       vendor="Red Hat, Inc."
 
 USER 65532:65532
