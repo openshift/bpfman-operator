@@ -82,7 +82,7 @@ COPY --from=bpfman-operator-build /usr/src/bpfman-operator/config/bpfman-deploym
 COPY --from=bpfman-operator-build /usr/src/bpfman-operator/bpfman-operator .
 COPY LICENSE /licenses/
 
-LABEL name="bpfman/bpfman-operator" \
+LABEL name="bpfman/bpfman-rhel9-operator" \
       com.redhat.component="bpfman-operator" \
       io.k8s.display-name="eBPF Manager Operator" \
       summary="eBPF manager operator manages the eBPF programs lifecycle." \

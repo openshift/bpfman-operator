@@ -89,7 +89,7 @@ LABEL operators.operatorframework.io.test.mediatype.v1=scorecard+v1
 LABEL operators.operatorframework.io.test.config.v1=tests/scorecard/
 
 # Labels for konflux to release the images
-LABEL name="bpfman-operator-bundle" \
+LABEL name="bpfman/bpfman-operator-bundle" \
       com.redhat.component="bpfman-operator-bundle-container" \
       io.k8s.display-name="Bpfman Operator Bundle" \
       description="Bpfman Operator bundle for OpenShift." \
