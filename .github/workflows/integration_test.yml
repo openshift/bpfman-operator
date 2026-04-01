@@ -1,20 +1,26 @@
 name: Kubernetes Integration Tests
 
 on:
-  pull_request:
-    branches: ["*"]
+  workflow_call:
   workflow_dispatch:
   schedule:
     - cron: "0 5 * * *" # Runs every day at 5 AM UTC
 
 jobs:
   kubernetes-integration-tests:
-    name: Kubernetes Integration Tests (Go ${{ matrix.go }} - amd64 - ${{ matrix.oci_bin }})
+    name: Go ${{ matrix.go }} - ${{ matrix.oci_bin }} - ${{ matrix.command }}
     runs-on: ubuntu-24.04
     strategy:
       matrix:
-        go: ["1.24"]
+        go: ["1.25"]
         oci_bin: ["docker", "podman"]
+        command: [
+          "integration",
+          "lifecycle"
+        ]
+        exclude:
+          - oci_bin: podman
+            command: "lifecycle"
     env:
       BPFMAN_AGENT_IMG: quay.io/bpfman/bpfman-agent:int-test
       BPFMAN_OPERATOR_IMG: quay.io/bpfman/bpfman-operator:int-test
@@ -34,23 +40,32 @@ jobs:
       - name: Check disk space again
         run: df -h
 
-      - name: Install go
-        uses: actions/setup-go@v5
-        with:
-          go-version: ${{ matrix.go }}
-
-      - name: cache go modules
-        uses: actions/cache@v4
-        with:
-          path: ~/go/pkg/mod
-          key: ${{ runner.os }}-build-codegen-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-build-codegen-
-
       - name: Checkout bpfman-operator
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
+
+      - name: Install go
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ matrix.go }}
+          cache: false
+
+      - name: Restore Go module cache
+        uses: actions/cache@v5
+        with:
+          path: ~/go/pkg/mod
+          key: go-mod-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            go-mod-
+
+      - name: Restore Go build cache
+        uses: actions/cache@v5
+        with:
+          path: ~/.cache/go-build
+          key: go-build-${{ github.sha }}
+          restore-keys: |
+            go-build-
 
       - name: Install OCI runtime (Docker or Podman)
         run: |
@@ -64,9 +79,15 @@ jobs:
 
       # Run integration tests only if OCI_BIN is Docker.
       - name: Run integration tests
-        if: ${{ matrix.oci_bin == 'docker' }}
+        if: ${{ (matrix.oci_bin == 'docker') && (matrix.command == 'integration') }}
         run: |
           make test-integration
+
+      # Run lifecycle tests only if OCI_BIN is Docker.
+      - name: Run lifecycle tests
+        if: ${{ (matrix.oci_bin == 'docker') && (matrix.command == 'lifecycle') }}
+        run: |
+          make run-on-kind && make test-lifecycle-local
 
       - name: Check disk space
         run: df -h
@@ -74,7 +95,7 @@ jobs:
       ## Upload diagnostics if integration test step failed.
       - name: Upload diagnostics
         if: ${{ failure() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: kubernetes-integration-test-diag
           path: /tmp/ktf-diag*
