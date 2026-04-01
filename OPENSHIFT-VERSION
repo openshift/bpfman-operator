@@ -1,3 +1,3 @@
-BUILDVERSION=0.6.0
+BUILDVERSION=0.6.1
 CPE_VERSION=0.6
 CSI_NODE_DRIVER_REGISTRAR_IMAGE=registry.redhat.io/openshift4/ose-csi-node-driver-registrar-rhel9@sha256:c4a2626cc9c4903a32e67a6fa68b874fb5e67085126030389a8a3210bf766de7
