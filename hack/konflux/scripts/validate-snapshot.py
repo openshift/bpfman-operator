@@ -6,14 +6,17 @@ Checks that all component SHAs referenced inside the bundle CSV
 match the component SHAs actually present in the snapshot.
 
 Usage:
-    # From integration test pipeline (JSON via environment variable):
+    # By snapshot name (fetches JSON from the cluster via oc/kubectl):
+    ./validate-snapshot.py bpfman-ystream-20260401-095050-000
+
+    # By snapshot JSON:
+    ./validate-snapshot.py '{"application":"...","components":[...]}'
+
+    # Via environment variable (integration test pipeline):
     SNAPSHOT='{"application":"...","components":[...]}' ./validate-snapshot.py
 
-    # Or via stdin:
+    # Via stdin:
     echo '{"application":"...","components":[...]}' | ./validate-snapshot.py
-
-    # Or via argument:
-    ./validate-snapshot.py --snapshot '{"application":"...","components":[...]}'
 """
 
 import argparse
@@ -23,6 +26,19 @@ import re
 import subprocess
 import sys
 import tempfile
+
+NAMESPACE = "ocp-bpfman-tenant"
+
+
+def fetch_snapshot_json(name, namespace=None):
+    """Fetch snapshot spec JSON from the cluster by name."""
+    if namespace is None:
+        namespace = NAMESPACE
+    result = subprocess.run(
+        ["oc", "get", "snapshot", name, "-n", namespace, "-o", "jsonpath={.spec}"],
+        capture_output=True, text=True, check=True,
+    )
+    return result.stdout
 
 
 def detect_stream(application_name):
@@ -225,34 +241,53 @@ def validate_snapshot(snapshot_json):
         return 0
 
 
+def resolve_snapshot_json(value, namespace=None):
+    """Resolve a snapshot argument to JSON.
+
+    If the value looks like JSON (starts with '{') it is returned
+    as-is.  Otherwise it is treated as a snapshot name and fetched
+    from the cluster.
+    """
+    if value.lstrip().startswith("{"):
+        return value
+    return fetch_snapshot_json(value, namespace=namespace)
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Validate Konflux snapshot self-consistency"
     )
     parser.add_argument(
-        "--snapshot",
-        help="Snapshot JSON (can also be provided via SNAPSHOT env var or stdin)"
+        "snapshot", nargs="?",
+        help="Snapshot name or JSON (auto-detected). "
+             "Can also be provided via SNAPSHOT env var or stdin."
+    )
+    parser.add_argument(
+        "-n", "--namespace", default=NAMESPACE,
+        help=f"Namespace for snapshot lookup (default: {NAMESPACE})"
     )
 
     args = parser.parse_args()
 
-    # Get snapshot JSON from argument, environment, or stdin
-    snapshot_json = None
-
+    raw = None
     if args.snapshot:
-        snapshot_json = args.snapshot
+        raw = args.snapshot
     elif os.environ.get("SNAPSHOT"):
-        snapshot_json = os.environ["SNAPSHOT"]
+        raw = os.environ["SNAPSHOT"]
     elif not sys.stdin.isatty():
-        snapshot_json = sys.stdin.read()
+        raw = sys.stdin.read()
 
-    if not snapshot_json:
-        print("ERROR: No snapshot provided", file=sys.stderr)
-        print("Provide via --snapshot argument, SNAPSHOT env var, or stdin", file=sys.stderr)
-        sys.exit(2)
+    if not raw:
+        parser.error("No snapshot provided. Pass a name, JSON, set SNAPSHOT env var, or pipe to stdin.")
 
     try:
+        snapshot_json = resolve_snapshot_json(raw, namespace=args.namespace)
         sys.exit(validate_snapshot(snapshot_json))
+    except subprocess.CalledProcessError as e:
+        print(f"ERROR: {e}", file=sys.stderr)
+        if e.stderr:
+            print(e.stderr.strip(), file=sys.stderr)
+        sys.exit(2)
     except json.JSONDecodeError as e:
         print(f"ERROR: Invalid JSON: {e}", file=sys.stderr)
         sys.exit(2)
