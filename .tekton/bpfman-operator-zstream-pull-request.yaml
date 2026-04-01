@@ -9,13 +9,12 @@ metadata:
     pipelinesascode.tekton.dev/cancel-in-progress: "true"
     pipelinesascode.tekton.dev/max-keep-runs: "3"
     pipelinesascode.tekton.dev/on-cel-expression: event == "pull_request" && target_branch
-      == "release-0.5.8" && (".tekton/multi-arch-build-pipeline.yaml".pathChanged() || ".tekton/bpfman-operator-zstream-pull-request.yaml".pathChanged()
+      == "release-0.6" && (".tekton/multi-arch-build-pipeline.yaml".pathChanged() || ".tekton/bpfman-operator-zstream-pull-request.yaml".pathChanged()
       || ".tekton/bpfman-operator-zstream-push.yaml".pathChanged() || "apis/***".pathChanged()
       || "controllers/***".pathChanged() || "cmd/***".pathChanged() || "Containerfile.bpfman-operator.openshift".pathChanged()
       || "go.mod".pathChanged() || "go.sum".pathChanged() || "Makefile".pathChanged()
       || "pkg/***".pathChanged() || "internal/***".pathChanged() || "test/***".pathChanged()
-      || "vendor/***".pathChanged() || "config/***".pathChanged() || "hack/openshift/***".pathChanged()
-      || "hack/konflux/images/bpfman.txt".pathChanged() || "OPENSHIFT-VERSION".pathChanged())
+      || "vendor/***".pathChanged() || "config/***".pathChanged() || "OPENSHIFT-VERSION".pathChanged())
   creationTimestamp: null
   labels:
     appstudio.openshift.io/application: bpfman-zstream
@@ -37,6 +36,9 @@ spec:
     value: Containerfile.bpfman-operator.openshift
   - name: build-args-file
     value: OPENSHIFT-VERSION
+  - name: build-args
+    value:
+    - BUILD_COMMIT={{revision}}
   - name: hermetic
     value: 'true'
   pipelineRef:
