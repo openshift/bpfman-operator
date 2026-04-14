@@ -179,7 +179,7 @@ func testMetricsProxySelfTest(ctx context.Context, t *testing.T, pod corev1.Pod,
 	cmd := []string{"env", "TOKEN=" + token, "/metrics-proxy", "test"}
 
 	var stdout, stderr bytes.Buffer
-	err := podExec(ctx, t, pod, &stdout, &stderr, cmd)
+	err := podExec(ctx, t, pod, "", &stdout, &stderr, cmd)
 
 	// For self-test, we expect exit code 0 for success, non-zero
 	// for failure. Parse the JSON regardless of exit code to get
@@ -244,7 +244,8 @@ func testMetricsProxySelfTest(ctx context.Context, t *testing.T, pod corev1.Pod,
 	t.Logf("All self-tests passed successfully on pod %s", pod.Name)
 }
 
-func podExec(ctx context.Context, t *testing.T, pod corev1.Pod, stdout, stderr *bytes.Buffer, cmd []string) error {
+// podExec executes a command in a pod's container and captures stdout/stderr output.
+func podExec(ctx context.Context, t *testing.T, pod corev1.Pod, container string, stdout, stderr *bytes.Buffer, cmd []string) error {
 	t.Helper()
 	kubeConfig, err := config.GetConfig()
 	if err != nil {
@@ -268,6 +269,9 @@ func podExec(ctx context.Context, t *testing.T, pod corev1.Pod, stdout, stderr *
 		Stdout:  true,
 		Stderr:  true,
 		TTY:     false,
+	}
+	if container != "" {
+		execOptions.Container = container
 	}
 
 	req.VersionedParams(execOptions, scheme.ParameterCodec)
@@ -296,6 +300,26 @@ func podExec(ctx context.Context, t *testing.T, pod corev1.Pod, stdout, stderr *
 // test output more readable and actionable.
 func TestAgentMetricsCollection(t *testing.T) {
 	ctx := context.Background()
+
+	// The metrics proxy DaemonSet is only deployed when the
+	// monitoring.coreos.com API group is present on the cluster.
+	// Check the API group directly rather than checking for pods,
+	// so that a missing proxy on a monitoring-capable cluster is
+	// caught as a real failure.
+	clientset := env.Cluster().Client()
+	apiList, err := clientset.Discovery().ServerGroups()
+	require.NoError(t, err, "Failed to discover API groups")
+	hasMonitoring := false
+	for _, g := range apiList.Groups {
+		if g.Name == "monitoring.coreos.com" {
+			hasMonitoring = true
+			break
+		}
+	}
+	if !hasMonitoring {
+		t.Skip("Skipping: monitoring.coreos.com API group not available on this cluster")
+	}
+
 	token, err := createMonitoringToken(ctx, t)
 	require.NoError(t, err, "Failed to create monitoring token")
 	require.NotEmpty(t, token, "Token should not be empty")

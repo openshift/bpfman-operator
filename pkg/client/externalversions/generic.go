@@ -19,7 +19,7 @@ limitations under the License.
 package externalversions
 
 import (
-	"fmt"
+	fmt "fmt"
 
 	v1alpha1 "github.com/bpfman/bpfman-operator/apis/v1alpha1"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
@@ -61,6 +61,8 @@ func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Bpfman().V1alpha1().ClusterBpfApplications().Informer()}, nil
 	case v1alpha1.SchemeGroupVersion.WithResource("clusterbpfapplicationstates"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Bpfman().V1alpha1().ClusterBpfApplicationStates().Informer()}, nil
+	case v1alpha1.SchemeGroupVersion.WithResource("configs"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Bpfman().V1alpha1().Configs().Informer()}, nil
 
 	}
 

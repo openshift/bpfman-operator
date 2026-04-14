@@ -1,0 +1,48 @@
+# Containerfile for testing Konflux scripts in the same environment as CI
+#
+# Note: The konflux-test image may have architecture issues when running locally.
+# For local development and testing, you can run the Python scripts directly
+# since they use standard tools (oc, python3) available on your system.
+#
+# == Local Testing (Recommended) ==
+#
+# 1. Get a snapshot JSON for testing:
+#
+#    oc get snapshot <snapshot-name> -n ocp-bpfman-tenant -o json | \
+#      jq '{application: .spec.application, components: .spec.components}' > /tmp/snapshot.json
+#
+# 2. Run the validation script:
+#
+#    python3 hack/konflux/scripts/validate-snapshot.py --snapshot "$(cat /tmp/snapshot.json)"
+#
+#    Or using environment variable:
+#
+#    SNAPSHOT="$(cat /tmp/snapshot.json)" python3 hack/konflux/scripts/validate-snapshot.py
+#
+# 3. The script will:
+#    - Parse the snapshot to find all components
+#    - Extract manifests from the bundle image using 'oc image extract'
+#    - Compare component SHAs in the bundle against those in the snapshot
+#    - Exit 0 if consistent, 1 if mismatched (should not release)
+#
+# == Using the Container Image ==
+#
+# If you need to test in the exact CI environment:
+#
+#   # Build locally
+#   podman build -f hack/konflux/Containerfile.local-test -t konflux-test-local .
+#
+#   # Run with scripts mounted
+#   podman run --rm -v ./hack/konflux/scripts:/scripts:Z \
+#     -e SNAPSHOT="$(cat /tmp/snapshot.json)" \
+#     konflux-test-local python3 /scripts/validate-snapshot.py
+#
+#   # Interactive shell for debugging
+#   podman run --rm -it -v ./hack/konflux/scripts:/scripts:Z konflux-test-local bash
+#
+# Note: Architecture compatibility issues may occur - prefer local testing.
+
+FROM quay.io/konflux-ci/konflux-test:stable
+
+# Scripts are mounted at runtime via -v
+WORKDIR /work

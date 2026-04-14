@@ -1,0 +1,13 @@
+Test file to trigger agent and operator builds simultaneously.
+
+Purpose: This change should trigger both agent and operator builds from the same commit,
+allowing us to observe the nudging behavior and race condition patterns.
+
+Expected behavior:
+1. Agent build triggers (due to cmd/ change)
+2. Operator build triggers (due to cmd/ change)
+3. Both builds complete at roughly the same time
+4. Both attempt to nudge bundle (either directly or via current nudging config)
+5. Observe whether race condition occurs in bundle CSV operator mismatch
+
+Timestamp: 2025-12-17 12:00:00Z

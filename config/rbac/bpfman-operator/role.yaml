@@ -4,6 +4,45 @@ kind: ClusterRole
 metadata:
   name: operator-role
 rules:
+- nonResourceURLs:
+  - /agent-metrics
+  - /metrics
+  verbs:
+  - get
+- apiGroups:
+  - ""
+  resources:
+  - configmaps
+  - services
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - endpoints
+  - nodes
+  - pods
+  - secrets
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - namespaces
+  verbs:
+  - get
+  - list
+  - patch
+  - update
+  - watch
 - apiGroups:
   - apps
   resources:
@@ -20,6 +59,8 @@ rules:
   - bpfman.io
   resources:
   - bpfapplications
+  - clusterbpfapplications
+  - configs
   verbs:
   - create
   - delete
@@ -32,12 +73,15 @@ rules:
   - bpfman.io
   resources:
   - bpfapplications/finalizers
+  - clusterbpfapplications/finalizers
+  - configs/finalizers
   verbs:
   - update
 - apiGroups:
   - bpfman.io
   resources:
   - bpfapplications/status
+  - clusterbpfapplications/status
   verbs:
   - get
   - patch
@@ -46,14 +90,15 @@ rules:
   - bpfman.io
   resources:
   - bpfapplicationstates
+  - clusterbpfapplicationstates
   verbs:
   - get
   - list
   - watch
 - apiGroups:
-  - bpfman.io
+  - monitoring.coreos.com
   resources:
-  - clusterbpfapplications
+  - servicemonitors
   verbs:
   - create
   - delete
@@ -63,49 +108,19 @@ rules:
   - update
   - watch
 - apiGroups:
-  - bpfman.io
+  - rbac.authorization.k8s.io
   resources:
-  - clusterbpfapplications/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - bpfman.io
-  resources:
-  - clusterbpfapplications/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - bpfman.io
-  resources:
-  - clusterbpfapplicationstates
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - bpfman.io
-  resources:
-  - configmaps/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - ""
-  resources:
-  - configmaps
+  - clusterrolebindings
+  - clusterroles
+  - rolebindings
+  - roles
   verbs:
   - create
+  - delete
   - get
   - list
-  - watch
-- apiGroups:
-  - ""
-  resources:
-  - nodes
-  verbs:
-  - get
-  - list
+  - patch
+  - update
   - watch
 - apiGroups:
   - security.openshift.io
@@ -116,7 +131,18 @@ rules:
   - delete
   - get
   - list
+  - patch
+  - update
   - watch
+- apiGroups:
+  - security.openshift.io
+  resourceNames:
+  - bpfman-restricted
+  - privileged
+  resources:
+  - securitycontextconstraints
+  verbs:
+  - use
 - apiGroups:
   - storage.k8s.io
   resources:
@@ -126,6 +152,8 @@ rules:
   - delete
   - get
   - list
+  - patch
+  - update
   - watch
 ---
 apiVersion: rbac.authorization.k8s.io/v1
