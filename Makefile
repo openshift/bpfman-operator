@@ -49,20 +49,26 @@ ifeq ($(USE_IMAGE_DIGESTS), true)
 	BUNDLE_GEN_FLAGS += --use-image-digests
 endif
 IMAGE_TAG ?= latest
-# Image URL to use all building/pushing image targets
+# Default upstream image references. Override via environment or .envrc
+# for local development (for example, to point at a private registry).
 BPFMAN_IMG ?= quay.io/bpfman/bpfman:$(IMAGE_TAG)
 BPFMAN_AGENT_IMG ?= quay.io/bpfman/bpfman-agent:$(IMAGE_TAG)
 BPFMAN_OPERATOR_IMG ?= quay.io/bpfman/bpfman-operator:$(IMAGE_TAG)
 KIND_CLUSTER_NAME ?= bpfman-deployment
+KIND_REGISTRY_NAME ?= kind-registry
+KIND_REGISTRY_PORT ?= 5001
+KIND_BUNDLE_IMG ?= localhost:$(KIND_REGISTRY_PORT)/bpfman-operator-bundle:latest
+KIND_BUNDLE_PULL_FLAGS ?= --use-http
 
-# These environment variable keys need to be exported as the
-# integration tests expect them to be defined.
+# These environment variables must be exported so they are
+# available to subprocesses (integration tests, run-local, etc.).
+export BPFMAN_IMG
 export BPFMAN_AGENT_IMG
 export BPFMAN_OPERATOR_IMG
 
 # ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
 ENVTEST_K8S_VERSION = 1.25.0
-K8S_CODEGEN_VERSION = v0.30.1
+K8S_CODEGEN_VERSION = v0.34.3
 
 .DEFAULT_GOAL := help
 
@@ -85,6 +91,13 @@ export OCI_BIN
 
 GOARCH ?= $(shell go env GOHOSTARCH)
 PLATFORM ?= $(shell go env GOHOSTOS)/$(shell go env GOHOSTARCH)
+
+## Version ldflags
+VERSION_PKG := github.com/bpfman/bpfman-operator/internal/version
+BUILD_VERSION ?= $(shell git describe --tags --dirty --always --long 2>/dev/null || echo 0.0.0-unknown)
+BUILD_COMMIT  ?= $(shell git rev-parse HEAD 2>/dev/null || echo unknown)
+BUILD_DATE    ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
+GO_LDFLAGS := -X '$(VERSION_PKG).buildVersion=$(BUILD_VERSION)' -X '$(VERSION_PKG).buildCommit=$(BUILD_COMMIT)' -X '$(VERSION_PKG).buildDate=$(BUILD_DATE)'
 
 .PHONY: all
 all: build
@@ -111,6 +124,9 @@ version: ## Display the current VERSION, IMAGE_TAG, and image paths being used
 	@echo "BPFMAN_AGENT_IMG: $(BPFMAN_AGENT_IMG)"
 	@echo "BPFMAN_IMG: $(BPFMAN_IMG)"
 	@echo "BPFMAN_OPERATOR_IMG: $(BPFMAN_OPERATOR_IMG)"
+	@echo "BUILD_COMMIT: $(BUILD_COMMIT)"
+	@echo "BUILD_DATE: $(BUILD_DATE)"
+	@echo "BUILD_VERSION: $(BUILD_VERSION)"
 	@echo "BUNDLE_IMG: $(BUNDLE_IMG)"
 	@echo "CATALOG_IMG: $(CATALOG_IMG)"
 	@echo "IMAGE_TAG: $(IMAGE_TAG)"
@@ -140,11 +156,13 @@ CLIENT_GEN ?= $(LOCALBIN)/client-gen
 ENVTEST ?= $(LOCALBIN)/setup-envtest
 CM_VERIFIER ?= $(LOCALBIN)/cm-verifier
 OPERATOR_SDK ?= $(LOCALBIN)/operator-sdk
+KIND ?= $(LOCALBIN)/kind
 
 ## Tool Versions
 KUSTOMIZE_VERSION ?= v3.8.7
-CONTROLLER_TOOLS_VERSION ?= v0.15.0
+CONTROLLER_TOOLS_VERSION ?= v0.17.1
 OPERATOR_SDK_VERSION ?= v1.27.0
+KIND_VERSION ?= v0.31.0
 GOLANGCI_LINT_VERSION = v2.0.2
 
 KUSTOMIZE_INSTALL_SCRIPT ?= "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh"
@@ -158,8 +176,15 @@ OPERATOR_SDK_DL_URL=https://github.com/operator-framework/operator-sdk/releases/
 .PHONY: operator-sdk
 operator-sdk: $(OPERATOR_SDK)
 $(OPERATOR_SDK): $(LOCALBIN)
-	test -s $(LOCALBIN)/operator_sdk || { curl -LO ${OPERATOR_SDK_DL_URL} && chmod +x ${OPERATOR_SDK_DL_NAME} &&\
+	test -s $(LOCALBIN)/operator-sdk || { curl -LO ${OPERATOR_SDK_DL_URL} && chmod +x ${OPERATOR_SDK_DL_NAME} &&\
 	 mv ${OPERATOR_SDK_DL_NAME} $(LOCALBIN)/operator-sdk; }
+
+KIND_DL_NAME=kind-$(shell go env GOOS)-$(shell go env GOARCH)
+KIND_DL_URL=https://github.com/kubernetes-sigs/kind/releases/download/$(KIND_VERSION)/$(KIND_DL_NAME)
+.PHONY: kind
+kind: $(KIND) ## Download kind locally if necessary.
+$(KIND): $(LOCALBIN)
+	test -s $(LOCALBIN)/kind || { curl -Lo $(LOCALBIN)/kind $(KIND_DL_URL) && chmod +x $(LOCALBIN)/kind; }
 
 .PHONY: controller-gen
 controller-gen: $(CONTROLLER_GEN) ## Download controller-gen locally if necessary.
@@ -303,11 +328,7 @@ test: fmt envtest ## Run Unit tests.
 
 
 .PHONY: test-integration
-test-integration: ## Run Integration tests.
-	cd config/bpfman-deployment && \
-	  $(SED) -e 's@bpfman\.image=.*@bpfman.image=$(BPFMAN_IMG)@' \
-	      -e 's@bpfman\.agent\.image=.*@bpfman.agent.image=$(BPFMAN_AGENT_IMG)@' \
-		  kustomization.yaml.env > kustomization.yaml
+test-integration: patch-image-references ## Run Integration tests.
 	GOFLAGS="-tags=integration_tests" go test -count=1 -race -v ./test/integration/...
 
 .PHONY: test-integration-local
@@ -316,17 +337,16 @@ test-integration-local: ## Run Integration tests against existing deployment. Us
 	SKIP_BPFMAN_DEPLOY=true \
 	GOFLAGS="-tags=integration_tests" go test -count=1 -race -v ./test/integration $(if $(TEST),-run $(TEST),)
 
+.PHONY: test-lifecycle-local
+test-lifecycle-local: ## Run lifecycle tests against existing deployment.
+	GOFLAGS="-tags=integration_tests" go test -count=1 -race -v ./test/lifecycle
+
 ## The physical bundle is no longer tracked in git since it should be considered
 ## and treated as a release artifact, rather than something that's updated
 ## as part of a pull request.
 ## See https://github.com/operator-framework/operator-sdk/issues/6285.
 .PHONY: bundle
-bundle: operator-sdk generate kustomize manifests ## Generate bundle manifests and metadata, then validate generated files.
-	cd config/bpfman-operator-deployment && $(KUSTOMIZE) edit set image quay.io/bpfman/bpfman-operator=${BPFMAN_OPERATOR_IMG}
-	cd config/bpfman-deployment && \
-	  $(SED) -e 's@bpfman\.image=.*@bpfman.image=$(BPFMAN_IMG)@' \
-	      -e 's@bpfman\.agent\.image=.*@bpfman.agent.image=$(BPFMAN_AGENT_IMG)@' \
-		  kustomization.yaml.env > kustomization.yaml
+bundle: operator-sdk generate kustomize manifests patch-image-references ## Generate bundle manifests and metadata, then validate generated files.
 	$(KUSTOMIZE) build config/manifests | $(OPERATOR_SDK) generate bundle $(BUNDLE_GEN_FLAGS)
 	# Dependency on security-profiles-operator removed (file renamed to dependencies.yaml.disabled)
 	# https://github.com/kubernetes-sigs/security-profiles-operator/issues/2699
@@ -337,14 +357,23 @@ bundle: operator-sdk generate kustomize manifests ## Generate bundle manifests a
 build-release-yamls: generate kustomize ## Generate the crd install bundle for a specific release version.
 	VERSION=$(VERSION) ./hack/build-release-yamls.sh
 
+.PHONY: default-config
+default-config: ## Print the default Config CR as YAML using current BPFMAN_IMG and BPFMAN_AGENT_IMG.
+	@BPFMAN_IMG=$(BPFMAN_IMG) BPFMAN_AGENT_IMG=$(BPFMAN_AGENT_IMG) go run ./cmd/bpfman-operator default-config
+
+.PHONY: run-local
+run-local: build ## Run the bpfman-operator locally for development purposes.
+	kubectl scale deployment -n bpfman bpfman-operator --replicas=0 || true
+	GO_LOG=debug bin/bpfman-operator
+
 ##@ Build
 
 .PHONY: build
 build: fmt ## Build bpfman-operator, bpfman-agent, and bpfman-crictl binaries.
-	CGO_ENABLED=0 GOOS=linux GOARCH=$(GOARCH) go build -mod vendor -o bin/bpfman-operator cmd/bpfman-operator/main.go
-	CGO_ENABLED=0 GOOS=linux GOARCH=$(GOARCH) go build -mod vendor -o bin/bpfman-agent cmd/bpfman-agent/main.go
-	CGO_ENABLED=0 GOOS=linux GOARCH=$(GOARCH) go build -mod vendor -o bin/metrics-proxy cmd/metrics-proxy/main.go
-	CGO_ENABLED=0 GOOS=linux GOARCH=$(GOARCH) go build -mod vendor -o bin/bpfman-crictl cmd/bpfman-crictl/main.go
+	CGO_ENABLED=0 GOOS=linux GOARCH=$(GOARCH) go build -mod vendor -ldflags "$(GO_LDFLAGS)" -o bin/bpfman-operator cmd/bpfman-operator/main.go
+	CGO_ENABLED=0 GOOS=linux GOARCH=$(GOARCH) go build -mod vendor -ldflags "$(GO_LDFLAGS)" -o bin/bpfman-agent cmd/bpfman-agent/main.go
+	CGO_ENABLED=0 GOOS=linux GOARCH=$(GOARCH) go build -mod vendor -ldflags "$(GO_LDFLAGS)" -o bin/metrics-proxy cmd/metrics-proxy/main.go
+	CGO_ENABLED=0 GOOS=linux GOARCH=$(GOARCH) go build -mod vendor -ldflags "$(GO_LDFLAGS)" -o bin/bpfman-crictl cmd/bpfman-crictl/main.go
 
 # These paths map the host's GOCACHE location to the container's
 # location. We want to mount the host's Go cache in the container to
@@ -369,6 +398,9 @@ build-operator-image: ## Build bpfman-operator image.
 	  --build-arg TARGETPLATFORM=linux/$(GOARCH) \
 	  --build-arg TARGETARCH=$(GOARCH) \
 	  --build-arg BUILDPLATFORM=linux/amd64 \
+	  --build-arg BUILD_VERSION=$(BUILD_VERSION) \
+	  --build-arg BUILD_COMMIT=$(BUILD_COMMIT) \
+	  --build-arg BUILD_DATE=$(BUILD_DATE) \
 	  $(if $(filter $(OCI_BIN),podman),--volume "$(LOCAL_GOCACHE_PATH):$(CONTAINER_GOCACHE_PATH):z") \
 	  -f Containerfile.bpfman-operator .
 
@@ -378,6 +410,9 @@ build-agent-image: ## Build bpfman-agent image.
 	  --build-arg TARGETPLATFORM=linux/$(GOARCH) \
 	  --build-arg TARGETARCH=$(GOARCH) \
 	  --build-arg BUILDPLATFORM=linux/amd64 \
+	  --build-arg BUILD_VERSION=$(BUILD_VERSION) \
+	  --build-arg BUILD_COMMIT=$(BUILD_COMMIT) \
+	  --build-arg BUILD_DATE=$(BUILD_DATE) \
 	  $(if $(filter $(OCI_BIN),podman),--volume "$(LOCAL_GOCACHE_PATH):$(CONTAINER_GOCACHE_PATH):z") \
 	  -f Containerfile.bpfman-agent .
 
@@ -387,16 +422,16 @@ push-images: ## Push bpfman-agent and bpfman-operator images.
 	$(OCI_BIN) push ${BPFMAN_AGENT_IMG}
 
 .PHONY: load-images-kind
-load-images-kind: ## Load bpfman-agent, and bpfman-operator images into the running local kind devel cluster.
-	./hack/kind-load-image.sh ${KIND_CLUSTER_NAME} ${BPFMAN_OPERATOR_IMG} ${BPFMAN_AGENT_IMG}
+load-images-kind: kind ## Load bpfman-agent, and bpfman-operator images into the running local kind devel cluster.
+	KIND=$(KIND) ./hack/kind-load-image.sh ${KIND_CLUSTER_NAME} ${BPFMAN_OPERATOR_IMG} ${BPFMAN_AGENT_IMG}
 
 .PHONY: bundle-build
 bundle-build: ## Build the bundle image.
-	docker build -f bundle.Dockerfile -t $(BUNDLE_IMG) .
+	$(OCI_BIN) build -f bundle.Dockerfile -t $(BUNDLE_IMG) .
 
 .PHONY: bundle-push
 bundle-push: ## Push the bundle image.
-	docker push $(BUNDLE_IMG)
+	$(OCI_BIN) push $(BUNDLE_IMG)
 
 # A comma-separated list of bundle images (e.g. make catalog-build BUNDLE_IMGS=example.com/operator-bundle:v0.1.0,example.com/operator-bundle:v0.2.0).
 # These images MUST exist in a registry and be pull-able.
@@ -437,56 +472,128 @@ install: manifests kustomize ## Install CRDs into the K8s cluster specified in ~
 uninstall: manifests kustomize ## Uninstall CRDs from the K8s cluster specified in ~/.kube/config. Call with ignore-not-found=true to ignore resource not found errors during deletion.
 	$(KUSTOMIZE) build config/crd | kubectl delete --ignore-not-found=$(ignore-not-found) -f -
 
+##@ Image Patching
+
+.PHONY: patch-image-references
+patch-image-references: kustomize ## Update all image references with environment variables
+	cd config/bpfman-operator-deployment && $(KUSTOMIZE) edit set image quay.io/bpfman/bpfman-operator=${BPFMAN_OPERATOR_IMG}
+# Patch the env var values in the deployment manifest by matching
+# on the env var name rather than the current value, so the
+# substitution is idempotent across repeated runs:
+#   1. Match the line containing the env var name (e.g., "name: BPFMAN_IMG")
+#   2. Advance to the next line (the "value:" line)
+#   3. Replace everything after "value:" with the new image reference
+# This means consecutive runs with different image values work
+# without needing to restore deployment.yaml from git first.
+#
+# Also reset any imagePullPolicy injection from a previous "make deploy"
+# so that deploy-openshift and bundle always start from clean defaults.
+	$(SED) -i -e '/name: BPFMAN_IMG/{n;s|^\([[:space:]]*value:[[:space:]]*\).*|\1$(BPFMAN_IMG)|;}' \
+	       -e '/name: BPFMAN_AGENT_IMG/{n;s|^\([[:space:]]*value:[[:space:]]*\).*|\1$(BPFMAN_AGENT_IMG)|;}' \
+	       -e '/name: BPFMAN_IMAGE_PULL_POLICY/{n;s|^\([[:space:]]*value:[[:space:]]*\).*|\1""|;}' \
+	       -e '/imagePullPolicy/d' \
+	       config/bpfman-operator-deployment/deployment.yaml
+
 ##@ Vanilla K8s Deployment
 
 .PHONY: setup-kind
-setup-kind: ## Setup Kind cluster
-	kind delete cluster --name ${KIND_CLUSTER_NAME} && kind create cluster --config hack/kind-config.yaml --name ${KIND_CLUSTER_NAME}
+setup-kind: kind ## Setup Kind cluster
+	$(KIND) delete cluster --name ${KIND_CLUSTER_NAME} && $(KIND) create cluster --config hack/kind-config.yaml --name ${KIND_CLUSTER_NAME}
+
+.PHONY: setup-kind-registry
+setup-kind-registry: kind ## Start a local registry for KIND and connect it to the KIND network.
+	$(OCI_BIN) inspect $(KIND_REGISTRY_NAME) >/dev/null 2>&1 || \
+	  $(OCI_BIN) run -d --restart=always -p "$(KIND_REGISTRY_PORT):5000" --name $(KIND_REGISTRY_NAME) registry:2
+	$(OCI_BIN) network connect kind $(KIND_REGISTRY_NAME) 2>/dev/null || true
+	for node in $$($(KIND) get nodes --name $(KIND_CLUSTER_NAME)); do \
+	  $(OCI_BIN) exec $$node mkdir -p /etc/containerd/certs.d/localhost:$(KIND_REGISTRY_PORT); \
+	  $(OCI_BIN) exec $$node sh -c "echo '[host.\"http://$(KIND_REGISTRY_NAME):5000\"]' > /etc/containerd/certs.d/localhost:$(KIND_REGISTRY_PORT)/hosts.toml"; \
+	done
 
 .PHONY: destroy-kind
-destroy-kind: ## Destroy Kind cluster
-	kind delete cluster --name ${KIND_CLUSTER_NAME}
+destroy-kind: kind ## Destroy Kind cluster
+	$(KIND) delete cluster --name ${KIND_CLUSTER_NAME}
+	$(OCI_BIN) rm -f $(KIND_REGISTRY_NAME) 2>/dev/null || true
 
 ## Default deploy target is KIND based with its CSI driver initialized.
 .PHONY: deploy
-deploy: manifests kustomize ## Deploy bpfman-operator to the K8s cluster specified in ~/.kube/config with the csi driver initialized.
-	cd config/bpfman-operator-deployment && $(KUSTOMIZE) edit set image quay.io/bpfman/bpfman-operator=${BPFMAN_OPERATOR_IMG}
-	cd config/bpfman-deployment && \
-	 $(SED)  -e 's@bpfman\.image=.*@bpfman.image=$(BPFMAN_IMG)@' \
-	      -e 's@bpfman\.agent\.image=.*@bpfman.agent.image=$(BPFMAN_AGENT_IMG)@' \
-		  kustomization.yaml.env > kustomization.yaml
+deploy: install patch-image-references ## Deploy bpfman-operator to the K8s cluster specified in ~/.kube/config with the csi driver initialized.
+	$(SED) -i -e '/name: BPFMAN_IMAGE_PULL_POLICY/{n;s|^\([[:space:]]*value:[[:space:]]*\).*|\1IfNotPresent|;}' \
+	       config/bpfman-operator-deployment/deployment.yaml
+	@if ! grep -q 'imagePullPolicy' config/bpfman-operator-deployment/deployment.yaml; then \
+		$(SED) -i '/^\([[:space:]]*\)image:.*/a\          imagePullPolicy: IfNotPresent' \
+		       config/bpfman-operator-deployment/deployment.yaml; \
+	fi
 	$(KUSTOMIZE) build config/default | kubectl apply -f -
 
 .PHONY: undeploy
-undeploy: ## Undeploy bpfman-operator from the K8s cluster specified in ~/.kube/config. Call with ignore-not-found=true to ignore resource not found errors during deletion.
-	kubectl delete --ignore-not-found=$(ignore-not-found) cm bpfman-config -n bpfman
-	kubectl wait --for=delete configmap/bpfman-config -n bpfman --timeout=60s
-	$(KUSTOMIZE) build config/default | kubectl delete --ignore-not-found=$(ignore-not-found) -f -
+undeploy: kustomize ## Undeploy bpfman-operator from the K8s cluster specified in ~/.kube/config. Call with ignore-not-found=true to ignore resource not found errors during deletion.
+	@if kubectl get crd configs.bpfman.io >/dev/null 2>&1; then \
+		kubectl delete --ignore-not-found=$(ignore-not-found) configs.bpfman.io bpfman-config; \
+		kubectl wait --for=delete configs.bpfman.io/bpfman-config --timeout=60s; \
+	fi
+	-$(KUSTOMIZE) build config/default | kubectl delete --ignore-not-found=$(ignore-not-found) -f -
 
 .PHONY: kind-reload-images
 kind-reload-images: load-images-kind ## Reload locally build images into a kind cluster and restart the ds and deployment so they're picked up.
-	kubectl rollout restart daemonset bpfman-daemon -n bpfman
 	kubectl rollout restart deployment bpfman-operator -n bpfman
+	kubectl rollout restart daemonset bpfman-daemon -n bpfman
+	@if kubectl get daemonset -n bpfman bpfman-metrics-proxy >/dev/null 2>&1; then \
+		kubectl rollout restart daemonset bpfman-metrics-proxy -n bpfman; \
+	fi
 
 .PHONY: run-on-kind
-run-on-kind: kustomize setup-kind build-images load-images-kind deploy ## Kind Deploy runs the bpfman-operator on a local kind cluster using local builds of bpfman, bpfman-agent, and bpfman-operator
+run-on-kind: kustomize setup-kind build-images load-images-kind install deploy ## Kind Deploy runs the bpfman-operator on a local kind cluster using local builds of bpfman, bpfman-agent, and bpfman-operator
+
+##@ OLM Bundle Deployment
+
+.PHONY: bundle-deploy
+bundle-deploy: operator-sdk build-images bundle bundle-build load-images-kind setup-kind-registry ## Deploy bpfman-operator via OLM bundle on the current cluster.
+	$(OPERATOR_SDK) olm install 2>/dev/null || true
+	kubectl delete catalogsource operatorhubio-catalog -n olm 2>/dev/null || true
+	kubectl create namespace bpfman 2>/dev/null || true
+	$(OCI_BIN) tag $(BUNDLE_IMG) $(KIND_BUNDLE_IMG)
+	$(OCI_BIN) push $(KIND_BUNDLE_IMG)
+	$(OPERATOR_SDK) run bundle $(KIND_BUNDLE_IMG) $(KIND_BUNDLE_PULL_FLAGS) -n bpfman --timeout 5m
+
+.PHONY: bundle-run-on-kind
+bundle-run-on-kind: kustomize setup-kind bundle-deploy ## Create a KIND cluster and deploy bpfman-operator via OLM bundle.
+
+.PHONY: bundle-deploy-openshift
+bundle-deploy-openshift: operator-sdk build-images push-images bundle bundle-build bundle-push ## Deploy bpfman-operator via OLM bundle on OpenShift.
+	kubectl create namespace bpfman 2>/dev/null || true
+	$(OPERATOR_SDK) run bundle $(BUNDLE_IMG) -n bpfman --timeout 5m
+
+.PHONY: bundle-undeploy
+bundle-undeploy: operator-sdk ## Remove the OLM bundle deployment.
+	$(OPERATOR_SDK) cleanup bpfman-operator -n bpfman
 
 ##@ Openshift Deployment
 
 .PHONY: deploy-openshift
-deploy-openshift: manifests kustomize ## Deploy bpfman-operator to the Openshift cluster specified in ~/.kube/config.
-	cd config/bpfman-operator-deployment && $(KUSTOMIZE) edit set image quay.io/bpfman/bpfman-operator=${BPFMAN_OPERATOR_IMG}
-	cd config/bpfman-deployment && \
-	  $(SED) -e 's@bpfman\.image=.*@bpfman.image=$(BPFMAN_IMG)@' \
-	      -e 's@bpfman\.agent\.image=.*@bpfman.agent.image=$(BPFMAN_AGENT_IMG)@' \
-		  kustomization.yaml.env > kustomization.yaml
-	$(KUSTOMIZE) build config/openshift | kubectl apply -f -
+deploy-openshift: install patch-image-references ## Deploy bpfman-operator to the Openshift cluster specified in ~/.kube/config.
+	$(KUSTOMIZE) build config/default | kubectl apply -f -
+
+.PHONY: patch-image-pull-policy
+patch-image-pull-policy: ## Patch imagePullPolicy on all bpfman resources. Set IMAGE_PULL_POLICY=Always|IfNotPresent|Never.
+ifndef IMAGE_PULL_POLICY
+	$(error IMAGE_PULL_POLICY is not set. Usage: make patch-image-pull-policy IMAGE_PULL_POLICY=IfNotPresent)
+endif
+	kubectl set env deployment/bpfman-operator -n bpfman BPFMAN_IMAGE_PULL_POLICY=$(IMAGE_PULL_POLICY)
+	kubectl patch deployment -n bpfman bpfman-operator -p '{"spec":{"template":{"spec":{"containers":[{"name":"bpfman-operator","imagePullPolicy":"$(IMAGE_PULL_POLICY)"}]}}}}'
+	@echo "Operator deployment patched to $(IMAGE_PULL_POLICY)."
+
+.PHONY: patch-pull-always
+patch-pull-always: ## Patch all bpfman deployments and daemonsets to use imagePullPolicy=Always.
+	$(MAKE) patch-image-pull-policy IMAGE_PULL_POLICY=Always
 
 .PHONY: undeploy-openshift
-undeploy-openshift: ## Undeploy bpfman-operator from the Openshift cluster specified in ~/.kube/config. Call with ignore-not-found=true to ignore resource not found errors during deletion.
-	kubectl delete --ignore-not-found=$(ignore-not-found) cm bpfman-config -n bpfman
-	kubectl wait --for=delete configmap/bpfman-config -n bpfman --timeout=60s
-	$(KUSTOMIZE) build config/openshift | kubectl delete --ignore-not-found=$(ignore-not-found) -f -
+undeploy-openshift: kustomize ## Undeploy bpfman-operator from the Openshift cluster specified in ~/.kube/config. Call with ignore-not-found=true to ignore resource not found errors during deletion.
+	@if kubectl get crd configs.bpfman.io >/dev/null 2>&1; then \
+		kubectl delete --ignore-not-found=$(ignore-not-found) configs.bpfman.io bpfman-config; \
+		kubectl wait --for=delete configs.bpfman.io/bpfman-config --timeout=60s; \
+	fi
+	-$(KUSTOMIZE) build config/default | kubectl delete --ignore-not-found=$(ignore-not-found) -f -
 
 # Deploy the catalog.
 .PHONY: catalog-deploy

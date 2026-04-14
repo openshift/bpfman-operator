@@ -21,9 +21,6 @@ metadata:
             "pod-security.kubernetes.io/audit": "privileged",
             "pod-security.kubernetes.io/warn": "privileged",
           },
-          "annotations": {
-            "openshift.io/node-selector": ""
-          },
         }
       }
     features.operators.openshift.io/disconnected: "true"
@@ -68,6 +65,11 @@ spec:
         displayName: Namespaced Bpf Application State
         kind: BpfApplicationState
         name: bpfapplicationstates.bpfman.io
+        version: v1alpha1
+      - description: Config is the Schema for the bpfman operator configuration API
+        displayName: Bpfman Config
+        kind: Config
+        name: configs.bpfman.io
         version: v1alpha1
   description:
     "The bpfman Operator is a Kubernetes Operator for deploying [bpfman](https://bpfman.netlify.app/),

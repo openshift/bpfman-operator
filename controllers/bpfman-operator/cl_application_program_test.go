@@ -31,6 +31,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
@@ -71,7 +72,7 @@ func appProgramReconcile(t *testing.T, multiCondition bool) {
 	attachInfo := bpfmaniov1alpha1.ClXdpAttachInfo{
 		InterfaceSelector: interfaceSelector,
 		NetworkNamespaces: nil,
-		Priority:          int32(xdpPriority),
+		Priority:          ptr.To(int32(xdpPriority)),
 		ProceedOn:         proceedOn,
 	}
 
@@ -109,7 +110,7 @@ func appProgramReconcile(t *testing.T, multiCondition bool) {
 			Links: []bpfmaniov1alpha1.ClKprobeAttachInfo{
 				{
 					Function: functionKprobeName,
-					Offset:   uint64(offset),
+					Offset:   int64(offset),
 				},
 			},
 		},
@@ -208,7 +209,7 @@ func appProgramReconcile(t *testing.T, multiCondition bool) {
 	}
 
 	// Require no requeue
-	require.False(t, res.Requeue)
+	require.Zero(t, res.RequeueAfter)
 
 	// Check if the BpfApplication Object was created successfully
 	err = cl.Get(ctx, types.NamespacedName{Name: app.Name, Namespace: metav1.NamespaceAll}, app)
@@ -241,7 +242,7 @@ func appProgramReconcile(t *testing.T, multiCondition bool) {
 	}
 
 	// Require no requeue
-	require.False(t, res.Requeue)
+	require.Zero(t, res.RequeueAfter)
 
 	// Check if the BpfApplication Object was created successfully
 	err = cl.Get(ctx, types.NamespacedName{Name: app.Name, Namespace: metav1.NamespaceAll}, app)

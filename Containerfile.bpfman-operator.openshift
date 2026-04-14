@@ -3,7 +3,11 @@ ARG BUILDVERSION
 # Build the manager binary
 ARG BUILDPLATFORM
 
+<<<<<<< konflux/component-updates/component-update-bpfman-operator-zstream
 FROM --platform=$BUILDPLATFORM registry.access.redhat.com/ubi9/go-toolset:9.7-1774618347 AS bpfman-operator-build
+=======
+FROM --platform=$BUILDPLATFORM registry.access.redhat.com/ubi9/go-toolset:9.7-1775042950 AS bpfman-operator-build
+>>>>>>> release-0.6
 
 ARG BUILDVERSION
 ARG BUILDPLATFORM
@@ -13,6 +17,13 @@ ARG TARGETOS
 ARG TARGETARCH
 ARG TARGETPLATFORM
 
+# Build metadata passed from the caller so that every platform in a
+# multi-arch build gets identical version strings.  When not supplied
+# (e.g. a plain "podman build") the values are computed locally.
+ARG BUILD_VERSION=${BUILDVERSION}
+ARG BUILD_COMMIT
+ARG BUILD_DATE
+
 RUN echo "TARGETOS=${TARGETOS}  TARGETARCH=${TARGETARCH}  BUILDPLATFORM=${BUILDPLATFORM}  TARGETPLATFORM=${TARGETPLATFORM}"
 
 WORKDIR /usr/src/bpfman-operator
@@ -20,17 +31,52 @@ WORKDIR /usr/src/bpfman-operator
 # Copy everything except what's excluded by the .dockerignore file.
 COPY . .
 
+# Replace upstream csi-node-driver-registrar image with Red Hat image.
+#
+# This RUN block performs a guarded sed replacement with the following safeguards:
+#   1. Fails if the upstream image reference is not found in an image: field
+#   2. Anchors on "image:" to avoid replacing references in comments or other contexts
+#   3. Handles both quoted and unquoted YAML values
+#   4. Always prints the diff for audit/transparency (diff returns 1 when files
+#      differ, so we suppress that with "|| true" to avoid triggering pipefail)
+#   5. Fails if no image: line was actually changed (guards against no-op)
+#   6. Fails if the target image reference is not present after replacement
+ARG CSI_NODE_DRIVER_REGISTRAR_IMAGE
+USER root
+RUN set -euo pipefail; \
+    ds=config/bpfman-deployment/daemonset.yaml; \
+    src='quay.io/bpfman/csi-node-driver-registrar'; \
+    dst="${CSI_NODE_DRIVER_REGISTRAR_IMAGE}"; \
+    grep -qE "^[[:space:]]*image:[[:space:]]*\"?${src}:" "${ds}" \
+      || { echo "ERROR: expected ${ds} to contain image: ${src}:<tag>"; exit 1; }; \
+    cp "${ds}" "${ds}.bak"; \
+    sed -E -i \
+      "s#(^[[:space:]]*image:[[:space:]]*\"?)${src}:[^\"[:space:]]+(\"?)#\\1${dst}\\2#g" \
+      "${ds}"; \
+    echo "=== daemonset.yaml image substitution diff ==="; \
+    { diff -u "${ds}.bak" "${ds}" || true; } | tee /dev/stderr | grep -q '^[-+].*image:' \
+      || { echo "ERROR: expected image line to change"; exit 1; }; \
+    grep -qF "${dst}" "${ds}" \
+      || { echo "ERROR: replacement failed in ${ds}"; exit 1; }; \
+    rm -f "${ds}.bak"
+
 # Build
 # the GOARCH has not a default value to allow the binary be built according to the host where the command
 # was called. For example, if we call make docker-build in a local env which has the Apple Silicon M1 SO
 # the docker BUILDPLATFORM arg will be linux/arm64 when for Apple x86 it will be linux/amd64. Therefore,
 # by leaving it empty we can ensure that the container and binary shipped on it will have the same platform.
 ENV GOEXPERIMENT=strictfipsruntime
-RUN CGO_ENABLED=1 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -tags strictfipsruntime -mod vendor -o bpfman-operator ./cmd/bpfman-operator/main.go
+RUN : "${BUILD_VERSION:=$(git describe --tags --dirty --always --long 2>/dev/null || echo 0.0.0-unknown)}" && \
+    : "${BUILD_COMMIT:=$(git rev-parse HEAD 2>/dev/null || echo unknown)}" && \
+    : "${BUILD_DATE:=$(date -u +%Y-%m-%dT%H:%M:%SZ)}" && \
+    VERSION_PKG="github.com/bpfman/bpfman-operator/internal/version" && \
+    LDFLAGS="-X '${VERSION_PKG}.buildVersion=${BUILD_VERSION}' -X '${VERSION_PKG}.buildCommit=${BUILD_COMMIT}' -X '${VERSION_PKG}.buildDate=${BUILD_DATE}'" && \
+    CGO_ENABLED=1 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -tags strictfipsruntime -mod vendor -ldflags "${LDFLAGS}" -o bpfman-operator ./cmd/bpfman-operator/main.go
 
-FROM --platform=$TARGETPLATFORM registry.access.redhat.com/ubi9/ubi-minimal:9.7-1773939694
+FROM --platform=$TARGETPLATFORM registry.access.redhat.com/ubi9/ubi-minimal:9.7-1776104705
 
 ARG BUILDVERSION
+ARG CPE_VERSION
 # The following ARGs are set internally by docker or podman on multiarch builds
 ARG TARGETPLATFORM
 
@@ -38,11 +84,10 @@ WORKDIR /
 COPY --from=bpfman-operator-build /usr/src/bpfman-operator/config/bpfman-deployment/daemonset.yaml ./config/bpfman-deployment/daemonset.yaml
 COPY --from=bpfman-operator-build /usr/src/bpfman-operator/config/bpfman-deployment/csidriverinfo.yaml ./config/bpfman-deployment/csidriverinfo.yaml
 COPY --from=bpfman-operator-build /usr/src/bpfman-operator/config/bpfman-deployment/metrics-proxy-daemonset.yaml ./config/bpfman-deployment/metrics-proxy-daemonset.yaml
-COPY --from=bpfman-operator-build /usr/src/bpfman-operator/config/openshift/restricted-scc.yaml ./config/openshift/restricted-scc.yaml
 COPY --from=bpfman-operator-build /usr/src/bpfman-operator/bpfman-operator .
 COPY LICENSE /licenses/
 
-LABEL name="bpfman/bpfman-operator" \
+LABEL name="bpfman/bpfman-rhel9-operator" \
       com.redhat.component="bpfman-operator" \
       io.k8s.display-name="eBPF Manager Operator" \
       summary="eBPF manager operator manages the eBPF programs lifecycle." \
@@ -51,6 +96,7 @@ LABEL name="bpfman/bpfman-operator" \
       io.openshift.tags="bpfman-operator" \
       maintainer="support@redhat.com" \
       version=$BUILDVERSION \
+      cpe="cpe:/a:redhat:openshift_bpfman_operator:${CPE_VERSION}::el9" \
       vendor="Red Hat, Inc."
 
 USER 65532:65532

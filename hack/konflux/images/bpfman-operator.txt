@@ -1,1 +1,5 @@
+<<<<<<< konflux/component-updates/component-update-bpfman-operator-zstream
 registry.redhat.io/bpfman/bpfman-rhel9-operator@sha256:aa1393fcedf5fd204e378663f0f935d6142505f4a2068bc3cec057b59adc4d35
+=======
+registry.redhat.io/bpfman/bpfman-rhel9-operator@sha256:f4f462bd394bda9aa65e547d8ef2e8c08fa867ace49dd660c542590ada9b6b2e
+>>>>>>> release-0.6

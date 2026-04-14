@@ -23,6 +23,15 @@ def main():
         "--image-pullspec", required=True, help="Operator image pullspec"
     )
     parser.add_argument(
+        "--agent-pullspec", help="bpfman-agent image pullspec (for relatedImages)"
+    )
+    parser.add_argument(
+        "--bpfman-pullspec", help="bpfman image pullspec (for relatedImages)"
+    )
+    parser.add_argument(
+        "--csi-pullspec", help="CSI node driver registrar image pullspec (for relatedImages)"
+    )
+    parser.add_argument(
         "--version", help="Version to set in CSV spec.version field"
     )
     parser.add_argument("--output", help="Output file (defaults to input file)")
@@ -143,6 +152,57 @@ def main():
         bpfman_operator_csv["spec"]["version"] = version
         # Update metadata.name to match version (pattern: bpfman-operator.v<version>)
         bpfman_operator_csv["metadata"]["name"] = f"bpfman-operator.v{version}"
+
+    # Patch BPFMAN_IMG and BPFMAN_AGENT_IMG environment variables in the
+    # operator deployment spec. The operator bootstraps its Config CR from
+    # these env vars at startup -- there is no Config CR in the bundle.
+    if args.agent_pullspec or args.bpfman_pullspec:
+        deployments = bpfman_operator_csv.get("spec", {}).get("install", {}).get("spec", {}).get("deployments", [])
+        for deployment in deployments:
+            containers = deployment.get("spec", {}).get("template", {}).get("spec", {}).get("containers", [])
+            for container in containers:
+                env_list = container.get("env", [])
+                for env_var in env_list:
+                    if env_var["name"] == "BPFMAN_IMG" and args.bpfman_pullspec:
+                        env_var["value"] = args.bpfman_pullspec.strip()
+                    elif env_var["name"] == "BPFMAN_AGENT_IMG" and args.agent_pullspec:
+                        env_var["value"] = args.agent_pullspec.strip()
+
+    # Build relatedImages section for disconnected environment support.
+    # OLM uses this to determine which images need to be mirrored.
+    related_images = []
+
+    # Operator image is always included
+    related_images.append({
+        "name": "bpfman-operator",
+        "image": args.image_pullspec
+    })
+
+    if args.agent_pullspec:
+        related_images.append({
+            "name": "bpfman-agent",
+            "image": args.agent_pullspec.strip()
+        })
+
+    if args.bpfman_pullspec:
+        related_images.append({
+            "name": "bpfman",
+            "image": args.bpfman_pullspec.strip()
+        })
+
+    if args.csi_pullspec:
+        related_images.append({
+            "name": "csi-node-driver-registrar",
+            "image": args.csi_pullspec.strip()
+        })
+
+    # Disabled: relatedImages causes EC olm.unmapped_references failures because
+    # the nudged registry.redhat.io refs don't exist yet at validation time.
+    # The release pipeline would need to inject these post-validation.
+    # if related_images:
+    #     if "spec" not in bpfman_operator_csv:
+    #         bpfman_operator_csv["spec"] = {}
+    #     bpfman_operator_csv["spec"]["relatedImages"] = related_images
 
     try:
         if args.output == "-":
