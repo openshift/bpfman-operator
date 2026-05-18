@@ -12,7 +12,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Check License Header
-        uses: apache/skywalking-eyes@cd7b195c51fd3d6ad52afceb760719ddc6b3ee91
+        uses: apache/skywalking-eyes@e910f72bae86171d727742c25f8a4555b7b83893
 
   build-meta:
     name: Compute build metadata
