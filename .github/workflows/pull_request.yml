@@ -47,7 +47,7 @@ jobs:
       - name: Install go
         uses: actions/setup-go@v6
         with:
-          go-version: "1.25"
+          go-version: "1.26"
           cache: false
 
       - name: Restore Go build cache
@@ -78,7 +78,7 @@ jobs:
       - name: Install go
         uses: actions/setup-go@v6
         with:
-          go-version: "1.25"
+          go-version: "1.26"
           cache: false
 
       - name: Restore Go module cache
@@ -114,7 +114,7 @@ jobs:
       - name: Install go
         uses: actions/setup-go@v6
         with:
-          go-version: "1.25"
+          go-version: "1.26"
           cache: false
 
       - name: Restore Go module cache
@@ -154,7 +154,7 @@ jobs:
       - name: Install go
         uses: actions/setup-go@v6
         with:
-          go-version: "1.25"
+          go-version: "1.26"
           cache: false
 
       - name: Restore Go module cache
@@ -199,7 +199,7 @@ jobs:
       - name: Install go
         uses: actions/setup-go@v6
         with:
-          go-version: "1.25"
+          go-version: "1.26"
           cache: false
 
       - name: Restore Go build cache
