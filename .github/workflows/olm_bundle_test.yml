@@ -62,7 +62,7 @@ jobs:
 
       - name: Upload diagnostics
         if: ${{ failure() }}
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: olm-bundle-integration-test-diag
           path: /tmp/ktf-diag*
@@ -125,7 +125,7 @@ jobs:
 
       - name: Upload diagnostics
         if: ${{ failure() }}
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: olm-bundle-lifecycle-test-diag
           path: /tmp/ktf-diag*
