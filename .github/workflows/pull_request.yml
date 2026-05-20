@@ -137,7 +137,7 @@ jobs:
         run: make test
 
       - name: Archive Go code coverage results
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: coverage-go
           path: cover.out
@@ -225,7 +225,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Download golang coverage artifacts
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v8
         with:
           name: coverage-go
 
