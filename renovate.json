@@ -7,6 +7,9 @@
   "gomod": {
     "enabled": false
   },
+  "github-actions": {
+    "enabled": false
+  },
   "packageRules": [
     {
       "matchManagers": ["pip_requirements"],
