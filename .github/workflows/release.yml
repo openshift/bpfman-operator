@@ -23,7 +23,7 @@ jobs:
             echo "PRE_RELEASE=false" >> $GITHUB_ENV
           fi
       - name: release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           body_path: ./changelogs/CHANGELOG-${{ env.RELEASE_VERSION }}.md
           prerelease: ${{ env.PRE_RELEASE }}
