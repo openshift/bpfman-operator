@@ -1,1 +1,1 @@
-registry.redhat.io/bpfman/bpfman-agent@sha256:52005bc5b4578306ba81f0305b28e094d673cac4ef628325de6dfb7097773d3a
+registry.redhat.io/bpfman/bpfman-agent@sha256:b27febbf11f4d94501e6db27238d28869f2d31ff117bed32bf9603cc41e966d2
