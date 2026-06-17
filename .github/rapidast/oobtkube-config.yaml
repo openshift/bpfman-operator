@@ -1,0 +1,17 @@
+config:
+  configVersion: 6
+  base_results_dir: /opt/rapidast/results
+
+application:
+  shortName: "bpfman-operator-oobtkube"
+  url: "https://localhost"
+
+general:
+  container:
+    type: none
+
+scanners:
+  generic_oobtkube:
+    results: "/opt/rapidast/results/oobtkube-results.sarif"
+    inline: |
+      python3.12 oobtkube.py --find-all --log-level debug -d 300 -p 6000 -i $POD_IP -f /tmp/bpfapplication-cr.yaml -o /opt/rapidast/results/oobtkube-results.sarif
