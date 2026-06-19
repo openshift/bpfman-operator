@@ -28,6 +28,11 @@
 # the authoritative base branch lives (the openshift remote), --push-remote is
 # where your branch goes (your fork). They are frequently different.
 
+# The emit calls below deliberately single-quote their arguments so that
+# $vars and $(...) reach the generated script literally and expand at its
+# runtime, not in this generator -- which is exactly what SC2016 warns
+# about, so disable it for the whole file.
+# shellcheck disable=SC2016
 set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -95,6 +100,12 @@ EOF
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
+        # Value-taking flags: fail with a clear message if the value is
+        # missing rather than tripping set -u on an unbound $2. The ;;&
+        # falls through to the specific arm below that consumes the value.
+        -b|--base|--base-remote|--push-remote|-H|--head|--repo)
+            [[ $# -ge 2 ]] || { echo "error: $1 requires a value" >&2; usage 2; }
+            ;;&
         ystream|zstream) stream="$1"; shift ;;
         -b|--base)        base="$2"; shift 2 ;;
         --base-remote)    base_remote="$2"; shift 2 ;;
@@ -125,6 +136,14 @@ fi
 
 cd "$repo_root"
 
+# The digest resolve below rewrites the image pins in place. Guarantee they
+# are restored on every exit path -- normal, error, or interrupt -- not just
+# the happy path, so a failed run never leaves the working tree modified.
+restore_nudge_dir() { git checkout --quiet -- "$nudge_dir" 2>/dev/null || true; }
+nudge_dirty=false
+trap 'if [[ "$nudge_dirty" == true ]]; then restore_nudge_dir; fi' EXIT
+trap 'exit 1' INT TERM
+
 # Resolving digests rewrites the image pins in place; refuse if they are dirty
 # so the restore below is exact. A dirty tree elsewhere is irrelevant.
 if [[ -n "$(git status --porcelain -- "$nudge_dir")" ]]; then
@@ -143,15 +162,16 @@ fi
 # reading the rewritten pins, then restoring the working tree. Send the sync's
 # own chatter to stderr so stdout stays pure script.
 echo "Resolving latest promoted digests for ${stream} from the cluster..." >&2
+nudge_dirty=true
 if ! "$sync_script" "$stream" >&2; then
     echo "error: sync-nudge-files.sh failed; is oc logged into the Konflux cluster?" >&2
-    git checkout --quiet -- "$nudge_dir" 2>/dev/null || true
-    exit 1
+    exit 1   # EXIT trap restores the nudge dir
 fi
 operator_line="$(cat "${nudge_dir}/bpfman-operator.txt")"
 agent_line="$(cat "${nudge_dir}/bpfman-agent.txt")"
 daemon_line="$(cat "${nudge_dir}/bpfman.txt")"
-git checkout --quiet -- "$nudge_dir"
+restore_nudge_dir
+nudge_dirty=false
 
 branch="nudge-bump-${stream}-${base}-$(date +%Y%m%d-%H%M%S)"
 
