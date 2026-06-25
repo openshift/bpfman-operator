@@ -196,13 +196,10 @@ def main():
             "image": args.csi_pullspec.strip()
         })
 
-    # Disabled: relatedImages causes EC olm.unmapped_references failures because
-    # the nudged registry.redhat.io refs don't exist yet at validation time.
-    # The release pipeline would need to inject these post-validation.
-    # if related_images:
-    #     if "spec" not in bpfman_operator_csv:
-    #         bpfman_operator_csv["spec"] = {}
-    #     bpfman_operator_csv["spec"]["relatedImages"] = related_images
+    if related_images:
+        if "spec" not in bpfman_operator_csv:
+            bpfman_operator_csv["spec"] = {}
+        bpfman_operator_csv["spec"]["relatedImages"] = related_images
 
     try:
         if args.output == "-":
