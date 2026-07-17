@@ -5,12 +5,12 @@ ARG BUILDPLATFORM
 
 # Verify that all code, including integration tests, compiles successfully.
 # This stage catches build failures early before the main build proceeds.
-FROM --platform=$BUILDPLATFORM registry.access.redhat.com/ubi9/go-toolset:9.8-1784090680 AS verify-test
+FROM --platform=$BUILDPLATFORM registry.access.redhat.com/ubi9/go-toolset:9.8-1784190466 AS verify-test
 WORKDIR /usr/src/bpfman-operator
 COPY . .
 RUN go test -mod vendor -tags=integration_tests -c -o /dev/null ./test/integration/... && touch /tmp/verify-test.done
 
-FROM --platform=$BUILDPLATFORM registry.access.redhat.com/ubi9/go-toolset:9.8-1784090680 AS bpfman-operator-build
+FROM --platform=$BUILDPLATFORM registry.access.redhat.com/ubi9/go-toolset:9.8-1784190466 AS bpfman-operator-build
 
 ARG BUILDVERSION
 ARG BUILDPLATFORM
