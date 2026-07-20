@@ -1,1 +1,1 @@
-registry.redhat.io/bpfman/bpfman@sha256:6ae07cc9d003a9a48b017875fd409cd7955cef104f93000e4265cd870e917bc6
+quay.io/redhat-user-workloads/ocp-bpfman-tenant/bpfman-daemon-ystream@sha256:d203d9be8fa0d475103ff62d3ac381be32ba4f4c39c14b2fc45495d6437807ac
