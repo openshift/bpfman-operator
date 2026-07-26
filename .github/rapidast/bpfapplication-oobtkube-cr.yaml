@@ -1,0 +1,73 @@
+apiVersion: bpfman.io/v1alpha1
+kind: BpfApplication
+metadata:
+  name: rapidast-oobtkube-test
+  namespace: bpfman
+  labels:
+    app.kubernetes.io/name: rapidast-oobtkube-test
+    app.kubernetes.io/component: dast-scan
+  annotations:
+    description: "Enriched BpfApplication CR for oobtkube blind command injection testing"
+spec:
+  nodeSelector:
+    matchLabels:
+      kubernetes.io/os: linux
+    matchExpressions:
+      - key: node-role.kubernetes.io/worker
+        operator: Exists
+  byteCode:
+    image:
+      url: "quay.io/bpfman-bytecode/xdp_pass:latest"
+      imagePullPolicy: IfNotPresent
+      imagePullSecret:
+        name: "bpfman-registry-secret"
+        namespace: "bpfman"
+  mapOwnerSelector:
+    matchLabels:
+      bpfman.io/ownedByApp: rapidast-oobtkube-test
+    matchExpressions:
+      - key: bpfman.io/mapOwner
+        operator: In
+        values:
+          - "rapidast-test-maps"
+          - "shared-maps"
+  programs:
+    - name: xdp_pass_func
+      type: XDP
+      xdp:
+        links:
+          - interfaceSelector:
+              interfaces:
+                - "eth0"
+                - "net1"
+            priority: 50
+            proceedOn:
+              - Pass
+              - DispatcherReturn
+    - name: tc_ingress_func
+      type: TC
+      tc:
+        links:
+          - direction: Ingress
+            interfaceSelector:
+              interfaces:
+                - "eth0"
+            networkNamespaces:
+              pods:
+                matchLabels:
+                  app: bpfman-agent
+            priority: 100
+            proceedOn:
+              - Pipe
+              - DispatcherReturn
+    - name: uprobe_ssl_func
+      type: UProbe
+      uprobe:
+        links:
+          - target: "/usr/lib/x86_64-linux-gnu/libssl.so.3"
+            containers:
+              containerNames:
+                - "bpfman-agent"
+              pods:
+                matchLabels:
+                  app: bpfman-agent

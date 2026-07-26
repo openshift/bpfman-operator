@@ -1,0 +1,36 @@
+config:
+  configVersion: 6
+  base_results_dir: /opt/rapidast/results
+  results:
+    exclusions:
+      rules:
+        - name: "Exclude findings below Important"
+          cel_expression: ".result.level != 'error' && .result.level != 'warning'"
+
+application:
+  shortName: "bpfman-operator-metrics"
+  url: "https://127.0.0.1:8443"
+
+general:
+  authentication:
+    type: http_header
+    parameters:
+      name: Authorization
+      value_from_var: AUTH_TOKEN
+  container:
+    type: none
+
+scanners:
+  zap:
+    spider:
+      maxDuration: 2
+      url: "https://127.0.0.1:8443/metrics"
+    passiveScan:
+      disabledRules: "2,10015,10024,10027,10054,10096,10109,10112"
+    activeScan:
+      policy: "API-scan-minimal"
+    report:
+      format: ["json", "html", "sarif"]
+    miscOptions:
+      enableUI: false
+      updateAddons: false

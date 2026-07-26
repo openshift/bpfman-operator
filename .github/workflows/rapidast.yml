@@ -1,0 +1,179 @@
+name: RapiDAST DAST Scan
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 0 * * 0" # Sunday midnight UTC
+
+jobs:
+  rapidast-dast-scan:
+    name: RapiDAST Security Scan
+    runs-on: ubuntu-24.04
+    env:
+      BPFMAN_AGENT_IMG: quay.io/bpfman/bpfman-agent:int-test
+      BPFMAN_OPERATOR_IMG: quay.io/bpfman/bpfman-operator:int-test
+    steps:
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /opt/ghc
+          sudo rm -rf "/usr/local/share/boost"
+          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+          sudo rm -rf /usr/local/lib/android
+
+      - name: Checkout bpfman-operator
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Install Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: "1.25"
+          cache: false
+
+      - name: Restore Go module cache
+        uses: actions/cache@v5
+        with:
+          path: ~/go/pkg/mod
+          key: go-mod-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            go-mod-
+
+      - name: Restore Go build cache
+        uses: actions/cache@v5
+        with:
+          path: ~/.cache/go-build
+          key: go-build-${{ github.sha }}
+          restore-keys: |
+            go-build-
+
+      - name: Build operator and agent images
+        run: make build-images
+
+      - name: Deploy operator on Kind cluster
+        run: make run-on-kind
+
+      - name: Wait for operator pods to be ready
+        run: |
+          echo "Waiting for bpfman-operator deployment..."
+          kubectl rollout status deployment/bpfman-operator -n bpfman --timeout=120s
+          echo "Waiting for bpfman-daemon daemonset..."
+          kubectl rollout status daemonset/bpfman-daemon -n bpfman --timeout=120s
+          echo "All pods ready:"
+          kubectl get pods -n bpfman
+
+      # --- ZAP Scan ---
+
+      - name: Port-forward metrics service
+        run: |
+          kubectl port-forward svc/controller-manager-metrics-service 8443:8443 -n bpfman &
+          echo $! > /tmp/port-forward.pid
+          sleep 3
+          echo "Port-forward PID: $(cat /tmp/port-forward.pid)"
+
+      - name: Create service account token for auth
+        id: sa-token
+        run: |
+          TOKEN=$(kubectl create token default -n bpfman --duration=30m)
+          echo "::add-mask::${TOKEN}"
+          echo "AUTH_TOKEN=Bearer ${TOKEN}" >> "$GITHUB_ENV"
+
+      - name: Run RapiDAST ZAP scan
+        continue-on-error: true
+        run: |
+          mkdir -p /tmp/rapidast-results/zap
+          docker run --rm \
+            --network host \
+            -v "${{ github.workspace }}/.github/rapidast/zap-config.yaml:/opt/rapidast/config.yaml:ro" \
+            -v "/tmp/rapidast-results/zap:/opt/rapidast/results" \
+            -e "AUTH_TOKEN=${AUTH_TOKEN}" \
+            quay.io/redhatproductsecurity/rapidast:development \
+            rapidast.py --config /opt/rapidast/config.yaml
+
+      - name: Stop port-forward
+        if: always()
+        run: |
+          if [ -f /tmp/port-forward.pid ]; then
+            kill "$(cat /tmp/port-forward.pid)" 2>/dev/null || true
+          fi
+
+      # --- oobtkube Scan ---
+
+      - name: Apply enriched BpfApplication CR
+        continue-on-error: true
+        run: |
+          kubectl apply -f .github/rapidast/bpfapplication-oobtkube-cr.yaml
+
+      - name: Get operator pod IP for oobtkube
+        id: pod-ip
+        run: |
+          POD_NAME=$(kubectl get pods -n bpfman -l control-plane=controller-manager -o jsonpath='{.items[0].metadata.name}')
+          POD_IP=$(kubectl get pod "${POD_NAME}" -n bpfman -o jsonpath='{.status.podIP}')
+          echo "POD_IP=${POD_IP}" >> "$GITHUB_ENV"
+          echo "Operator pod: ${POD_NAME} at ${POD_IP}"
+
+      - name: Run RapiDAST oobtkube scan
+        continue-on-error: true
+        run: |
+          mkdir -p /tmp/rapidast-results/oobtkube
+          docker run --rm \
+            --network host \
+            -v "${{ github.workspace }}/.github/rapidast/oobtkube-config.yaml:/opt/rapidast/config.yaml:ro" \
+            -v "${{ github.workspace }}/.github/rapidast/bpfapplication-oobtkube-cr.yaml:/tmp/bpfapplication-cr.yaml:ro" \
+            -v "/tmp/rapidast-results/oobtkube:/opt/rapidast/results" \
+            -e "POD_IP=${POD_IP}" \
+            quay.io/redhatproductsecurity/rapidast:development \
+            rapidast.py --config /opt/rapidast/config.yaml
+
+      # --- Results ---
+
+      - name: Upload ZAP scan results
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: rapidast-zap-results
+          path: /tmp/rapidast-results/zap/
+          if-no-files-found: warn
+
+      - name: Upload oobtkube scan results
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: rapidast-oobtkube-results
+          path: /tmp/rapidast-results/oobtkube/
+          if-no-files-found: warn
+
+      - name: Generate scan summary
+        if: always()
+        run: |
+          ZAP_REPORT="/tmp/rapidast-results/zap/bpfman-operator-metrics/zap/zap-report.json"
+          OOBT_REPORT="/tmp/rapidast-results/oobtkube/oobtkube-results.sarif"
+
+          if [ -f "$ZAP_REPORT" ]; then
+            ZAP_ALERTS=$(jq '.site[].alerts | length' "$ZAP_REPORT" 2>/dev/null || echo "N/A")
+            ZAP_LINE="- **Alerts found**: ${ZAP_ALERTS}
+          - Full report available in workflow artifacts"
+          else
+            ZAP_LINE="- No ZAP report found (scan may have failed or produced no results)"
+          fi
+
+          if [ -f "$OOBT_REPORT" ]; then
+            OOBT_RESULTS=$(jq '.runs[0].results | length' "$OOBT_REPORT" 2>/dev/null || echo "N/A")
+            OOBT_LINE="- **Injection detections**: ${OOBT_RESULTS}"
+          else
+            OOBT_LINE="- No oobtkube report found (scan may have failed or produced no results)"
+          fi
+
+          cat >> "$GITHUB_STEP_SUMMARY" <<EOF
+          ## RapiDAST DAST Scan Results
+
+          ### ZAP Scan (metrics endpoint)
+          ${ZAP_LINE}
+
+          ### oobtkube Scan (BpfApplication CRD injection)
+          ${OOBT_LINE}
+
+          ---
+          *Scan powered by [RapiDAST](https://github.com/RedHatProductSecurity/rapidast) \`development\` image*
+          EOF
