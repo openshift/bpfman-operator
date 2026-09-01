@@ -43,7 +43,7 @@ RUN : "${BUILD_VERSION:=$(git describe --tags --dirty --always --long 2>/dev/nul
     CGO_ENABLED=1 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -tags strictfipsruntime -mod vendor -ldflags "${LDFLAGS}" -o bpfman-crictl ./cmd/bpfman-crictl/main.go
 
 
-FROM --platform=$TARGETPLATFORM registry.access.redhat.com/ubi9/ubi-minimal:9.8-1784092902
+FROM --platform=$TARGETPLATFORM registry.access.redhat.com/ubi9/ubi-minimal:9.8-1788166357
 
 ARG BUILDVERSION
 ARG CPE_VERSION
